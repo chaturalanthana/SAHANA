@@ -364,10 +364,11 @@ model WelfareSchemeVersion {
   id            String   @id @default(uuid()) @db.Uuid
   societyId     String   @map("society_id") @db.Uuid
   schemeId      String   @map("scheme_id") @db.Uuid
-  versionNo     Int      @map("version_no")
-  ruleBody      Json     @default("{}") @map("rule_body")
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  createdBy     String   @map("created_by") @db.Uuid
+  versionNo     Int       @map("version_no")
+  ruleBody      Json      @default("{}") @map("rule_body")
+  publishedAt   DateTime? @map("published_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy     String    @map("created_by") @db.Uuid
 
   @@unique([schemeId, versionNo])
   @@index([societyId])
@@ -382,6 +383,9 @@ model Claim {
   schemeVersionId   String   @map("scheme_version_id") @db.Uuid
   idempotencyKey    String   @map("idempotency_key")
   eligibilityStatus String   @default("not_calculated") @map("eligibility_status")
+  eligibilityReason String   @default("") @map("eligibility_reason")
+  evidenceNote      String   @default("") @map("evidence_note")
+  amount            Decimal? @db.Decimal(19, 4)
   status            String   @default("submitted")
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   createdBy         String   @map("created_by") @db.Uuid
@@ -407,8 +411,9 @@ model ClaimEvent {
 model ApprovalRoute {
   id           String   @id @default(uuid()) @db.Uuid
   societyId    String   @map("society_id") @db.Uuid
-  name         String
-  policyStatus String   @default("stored_not_in_force") @map("policy_status")
+  name              String
+  policyStatus      String  @default("in_force") @map("policy_status")
+  allowSelfApproval Boolean @default(false) @map("allow_self_approval")
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   createdBy    String   @map("created_by") @db.Uuid
 
@@ -462,6 +467,7 @@ model Account {
   code        String
   name        String
   accountType String   @map("account_type")
+  isCash      Boolean  @default(false) @map("is_cash")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   createdBy   String   @map("created_by") @db.Uuid
 
@@ -517,11 +523,81 @@ model JournalLine {
   documentId String  @map("document_id") @db.Uuid
   accountId  String  @map("account_id") @db.Uuid
   fundId     String? @map("fund_id") @db.Uuid
+  memberId   String? @map("member_id") @db.Uuid
   debit      Decimal @default(0) @db.Decimal(19, 4)
   credit     Decimal @default(0) @db.Decimal(19, 4)
 
   @@index([societyId, documentId])
   @@map("journal_lines")
+}
+
+model BankAccount {
+  id        String   @id @default(uuid()) @db.Uuid
+  societyId String   @map("society_id") @db.Uuid
+  name      String
+  accountId String   @map("account_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String   @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("bank_accounts")
+}
+
+model BankStatementLine {
+  id            String    @id @default(uuid()) @db.Uuid
+  societyId     String    @map("society_id") @db.Uuid
+  bankAccountId String    @map("bank_account_id") @db.Uuid
+  bookedOn      DateTime  @map("booked_on") @db.Date
+  amount        Decimal   @db.Decimal(19, 4)
+  description   String
+  journalLineId String?   @unique @map("journal_line_id") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy     String    @map("created_by") @db.Uuid
+
+  @@index([societyId, bankAccountId])
+  @@map("bank_statement_lines")
+}
+
+model Budget {
+  id        String   @id @default(uuid()) @db.Uuid
+  societyId String   @map("society_id") @db.Uuid
+  name      String
+  accountId String   @map("account_id") @db.Uuid
+  periodId  String   @map("period_id") @db.Uuid
+  amount    Decimal  @db.Decimal(19, 4)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String   @map("created_by") @db.Uuid
+
+  @@index([societyId, periodId])
+  @@map("budgets")
+}
+
+model FixedAsset {
+  id               String   @id @default(uuid()) @db.Uuid
+  societyId        String   @map("society_id") @db.Uuid
+  name             String
+  cost             Decimal  @db.Decimal(19, 4)
+  acquiredOn       DateTime @map("acquired_on") @db.Date
+  usefulLifeYears  Int?      @map("useful_life_years")
+  disposedAt       DateTime? @map("disposed_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy        String   @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("fixed_assets")
+}
+
+model Investment {
+  id         String   @id @default(uuid()) @db.Uuid
+  societyId  String   @map("society_id") @db.Uuid
+  name       String
+  cost       Decimal  @db.Decimal(19, 4)
+  acquiredOn DateTime @map("acquired_on") @db.Date
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy  String   @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("investments")
 }
 
 model LoanProduct {
@@ -539,14 +615,32 @@ model LoanProductVersion {
   id        String   @id @default(uuid()) @db.Uuid
   societyId String   @map("society_id") @db.Uuid
   productId String   @map("product_id") @db.Uuid
-  versionNo Int      @map("version_no")
-  ruleBody  Json     @default("{}") @map("rule_body")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  createdBy String   @map("created_by") @db.Uuid
+  versionNo   Int       @map("version_no")
+  ruleBody    Json      @default("{}") @map("rule_body")
+  publishedAt DateTime? @map("published_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy   String    @map("created_by") @db.Uuid
 
   @@unique([productId, versionNo])
   @@index([societyId])
   @@map("loan_product_versions")
+}
+
+model LoanScheduleLine {
+  id             String   @id @default(uuid()) @db.Uuid
+  societyId      String   @map("society_id") @db.Uuid
+  applicationId  String   @map("application_id") @db.Uuid
+  installmentNo  Int      @map("installment_no")
+  dueOn          DateTime @map("due_on") @db.Date
+  principal      Decimal  @db.Decimal(19, 4)
+  interest       Decimal  @db.Decimal(19, 4)
+  fee            Decimal  @default(0) @db.Decimal(19, 4)
+  status         String   @default("due")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([applicationId, installmentNo])
+  @@index([societyId, applicationId])
+  @@map("loan_schedule_lines")
 }
 
 model LoanApplication {
@@ -668,6 +762,35 @@ model EmergencyUpdate {
   @@map("emergency_updates")
 }
 
+model EsgResult {
+  id               String   @id @default(uuid()) @db.Uuid
+  societyId        String   @map("society_id") @db.Uuid
+  kpiId            String?  @map("kpi_id") @db.Uuid
+  measure          String
+  periodStart      DateTime @map("period_start") @db.Date
+  periodEnd        DateTime @map("period_end") @db.Date
+  verifiedTotal    Decimal  @map("verified_total") @db.Decimal(19, 4)
+  unverifiedCount  Int      @map("unverified_count")
+  sourceIds        Json     @map("source_ids")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy        String   @map("created_by") @db.Uuid
+
+  @@index([societyId, measure])
+  @@map("esg_results")
+}
+
+model SourceVerification {
+  id         String   @id @default(uuid()) @db.Uuid
+  societyId  String   @map("society_id") @db.Uuid
+  objectType String   @map("object_type")
+  objectId   String   @map("object_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy  String   @map("created_by") @db.Uuid
+
+  @@unique([societyId, objectType, objectId])
+  @@map("source_verifications")
+}
+
 model EsgGoal {
   id        String   @id @default(uuid()) @db.Uuid
   societyId String   @map("society_id") @db.Uuid
@@ -691,6 +814,22 @@ model EsgKpiDefinition {
 
   @@index([societyId, goalId])
   @@map("esg_kpi_definitions")
+}
+
+model NotificationDelivery {
+  id         String   @id @default(uuid()) @db.Uuid
+  societyId  String   @map("society_id") @db.Uuid
+  memberId   String?  @map("member_id") @db.Uuid
+  channel    String
+  status     String
+  messageKey String   @map("message_key")
+  objectType String   @map("object_type")
+  objectId   String   @map("object_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy  String   @map("created_by") @db.Uuid
+
+  @@index([societyId, createdAt])
+  @@map("notification_deliveries")
 }
 
 model NotificationTemplate {

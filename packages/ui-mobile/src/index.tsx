@@ -1,6 +1,6 @@
 import type { PressableProps, TextInputProps } from 'react-native';
 import { Pressable, Text, TextInput, View } from 'react-native';
-import { color, fontSize, lineHeight, space } from '@sahana/design-tokens';
+import { color, fontSize, lineHeight, radius, space } from '@sahana/design-tokens';
 
 type ButtonProps = PressableProps & {
   label: string;
@@ -15,7 +15,7 @@ export function Button({ label, loading = false, disabled, ...props }: ButtonPro
       disabled={inactive}
       style={{
         minHeight: 44,
-        borderRadius: 8,
+        borderRadius: radius.control,
         backgroundColor: inactive ? color.border : color.primary,
         alignItems: 'center',
         justifyContent: 'center',
@@ -44,7 +44,7 @@ export function TextField({ label, error, ...props }: TextFieldProps) {
           minHeight: 44,
           borderWidth: 1,
           borderColor: color.border,
-          borderRadius: 8,
+          borderRadius: radius.control,
           paddingHorizontal: space[3],
           color: color.text,
           fontSize: fontSize.body,
@@ -53,7 +53,7 @@ export function TextField({ label, error, ...props }: TextFieldProps) {
         }}
         {...props}
       />
-      {error ? <Text style={{ color: color.danger, fontSize: fontSize.label }}>{error}</Text> : null}
+      {error ? <Text style={{ color: color.dangerInk, fontSize: fontSize.label }}>{error}</Text> : null}
     </View>
   );
 }

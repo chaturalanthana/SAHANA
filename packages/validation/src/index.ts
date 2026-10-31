@@ -46,6 +46,10 @@ export const languageBodySchema = z.object({
   language: z.enum(LOCALES),
 });
 
+export const mfaCodeSchema = z.object({
+  code: z.string().trim().regex(/^\d{6}$/),
+});
+
 export const configWriteSchema = z.object({
   value: z.string().max(500),
   reason: z.string().trim().min(1).max(500),

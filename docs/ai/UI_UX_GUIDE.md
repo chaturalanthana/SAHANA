@@ -1,7 +1,7 @@
 # SAHANA UI/UX Guide
 
 Status: active from the governance foundation (31 October 2026).
-Visual references: a clean, compact, modern iBilz-inspired layout. iBilz is a design direction, not a license to copy a third-party product's branding, assets, or code.
+Visual references: the public iBilz admin app at `https://app.ibilz.com/auth/login` (Vuexy-style Bootstrap theme), accepted as TD-08 on 31 October 2026. Copy the layout pattern and the palette. Do not copy iBilz logos, illustrations, stylesheets, or code.
 
 The product must feel simple while the operation underneath is not. If a screen needs a paragraph of explanation before a member can finish the task, the screen is wrong.
 
@@ -28,9 +28,10 @@ A screen is not complete until the task has been completed at phone width, table
 
 ## Web navigation
 
-- Society administrators use a compact left navigation on desktop and a menu button plus the same destinations on small screens.
-- Group destinations by the job: Members, Welfare, Emergency, Loans, Finance, Projects, ESG, Communications, Settings. Hide a group the caller cannot access.
-- The top bar shows the society name, the current user, and the language switcher. It does not show database or environment secrets (SRS 030). A non-production environment may show a plain text banner such as the configured environment name.
+- Society administrators use a light vertical sidebar, about 260px wide, that collapses to icons on desktop. Below 768px the same destinations open from a menu button as an overlay. Do not leave the sidebar on screen at 320px.
+- Group destinations by the job: Members, Welfare, Emergency, Loans, Finance, Projects, ESG, Communications, Settings. Hide a group the caller cannot access. The active item uses a light green tint and the darkened primary ink.
+- The top bar is a white rounded bar with a soft shadow. It shows the society name, a language menu, and a user menu. It does not show database or environment secrets (SRS 030). A non-production environment may show a plain text banner such as the configured environment name.
+- Page background is light gray. Content sits in white rounded cards with a soft shadow. Dashboards lead with KPI cards. Lists are tables from 768px up and stacked records below that.
 - Deep pages keep a short breadcrumb. Do not add a second navigation inside a module unless the module has more than one primary list.
 
 ## Mobile navigation
@@ -49,10 +50,29 @@ A screen is not complete until the task has been completed at phone width, table
 
 ## Color and spacing
 
-- Tokens, not raw hex in components. Semantic tokens: `color.bg`, `color.surface`, `color.text`, `color.muted`, `color.border`, `color.primary`, `color.danger`, `color.warning`, `color.success`, `color.info`.
-- Primary is used for the main action and for links. Danger is reserved for irreversible or harmful actions.
-- Status colors are paired with a text label and, where useful, an icon.
-- Spacing scale: 4, 8, 12, 16, 24, 32. Compact forms use 12 between fields, 24 between groups. Do not invent one-off margins.
+Tokens live in `packages/design-tokens`. Feature components do not hardcode hex. The web theme variables repeat those values so Tailwind can see them.
+
+iBilz swatches, confirmed from `https://app.ibilz.com/theme/app-assets/css/colors.css` and `bootstrap-extended.css` on 31 October 2026:
+
+| Role | Value | Use |
+|---|---|---|
+| Primary | `#6ca925` | Buttons, active tint, brand fill |
+| Secondary | `#82868b` | Quiet chrome |
+| Success | `#28c76f` | Success fill |
+| Danger | `#ea5455` | Danger fill |
+| Warning | `#ff9f43` | Warning fill |
+| Info | `#00cfe8` | Info fill |
+| Heading | `#4b4b4b`, `#22292f` | Titles and button labels on green |
+| Body | `#6e6b7b` | Reading text |
+| Muted | `#b9b9c3` | Placeholders and decorative marks only |
+| Page | `#f6f6f6` | Page background |
+| Border | `#ebe9f1` | Card and field borders |
+| Surface | `#ffffff` | Sidebar, navbar, cards |
+
+`#6ca925` on white is about 2.9:1, so links and small text use `#3d6810` (`primaryInk`). White text on the brand green also fails, so primary buttons use `#22292f` labels. Success, danger, warning, and info text use the `*Ink` tokens. A status still has a word, not color alone.
+
+- Primary is the main action. Danger is reserved for irreversible or harmful actions, and those buttons use the darker danger ink with white text.
+- Spacing scale: 4, 8, 12, 16, 24, 32. Cards use a 8px radius and the shadow `0 4px 24px 0 rgba(34, 41, 47, 0.1)`. Compact forms use 12 between fields, 24 between groups.
 - Contrast for text and for status indicators meets WCAG 2.2 AA (at least 4.5:1 for body text, 3:1 for large text and non-text UI).
 
 ## Reusable components

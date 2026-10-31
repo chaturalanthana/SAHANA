@@ -45,7 +45,7 @@ export function LoginPage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-8">
       <div className="mb-6 flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold tracking-wide">{t('common.appName')}</p>
+        <p className="text-sm font-semibold tracking-wide text-primary-ink">{t('common.appName')}</p>
         <div role="group" aria-label={t('common.language.label')} className="flex gap-1">
           {SUPPORTED_LOCALES.map((code) => (
             <button
@@ -53,7 +53,7 @@ export function LoginPage() {
               type="button"
               data-locale={code}
               aria-pressed={locale === code}
-              className={`min-h-11 rounded-md px-2 text-sm ${locale === code ? 'bg-primary text-primary-text' : 'text-text'}`}
+              className={`min-h-11 rounded-md px-2 text-sm ${locale === code ? 'bg-primary/15 font-semibold text-primary-ink' : 'text-heading'}`}
               onClick={() => setLocale(code)}
             >
               {t(`common.language.${code}`)}
@@ -61,8 +61,8 @@ export function LoginPage() {
           ))}
         </div>
       </div>
-      <form onSubmit={(event) => void submit(event)} className="rounded-lg border border-border bg-surface p-4">
-        <h1 className="text-xl font-semibold">{t('auth.signIn.title')}</h1>
+      <form onSubmit={(event) => void submit(event)} className="sahana-card p-4">
+        <h1 className="text-xl font-semibold text-heading">{t('auth.signIn.title')}</h1>
         <div className="mt-4 flex flex-col gap-3">
           <TextField
             label={t('auth.signIn.email')}
@@ -101,7 +101,7 @@ export function LoginPage() {
             </label>
           ) : null}
           {error ? (
-            <p role="alert" className="text-sm text-danger">
+            <p role="alert" className="text-sm text-danger-ink">
               {error}
             </p>
           ) : null}

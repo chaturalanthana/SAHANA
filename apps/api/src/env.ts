@@ -45,5 +45,8 @@ export function assertBootEnv(): { sessionSecret: string; databaseUrl: string } 
   if (env.sessionSecret.length < 32) {
     throw new Error('SESSION_SECRET must be at least 32 characters');
   }
+  if (env.nodeEnv === 'production' && process.env.MFA_REQUIRED !== 'true') {
+    throw new Error('MFA_REQUIRED must be true in production');
+  }
   return { sessionSecret: env.sessionSecret, databaseUrl: env.databaseUrl };
 }

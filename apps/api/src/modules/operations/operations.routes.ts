@@ -5,6 +5,8 @@ import { ApiError } from '../../errors';
 import type { Scope } from '../../db';
 import {
   addJournalLine,
+  addProjectExpense,
+  addProjectParticipant,
   addMemberFamily,
   changeMemberStatus,
   createAccount,
@@ -13,16 +15,34 @@ import {
   createApprovalRoute,
   createApprovalStage,
   createClaim,
+  findRecord,
+  listClaimEvents,
+  recordPermission,
+  updateCommitteeName,
+  updateTemplateBody,
+  createAppointment,
   createEmergency,
+  createGovernanceDocument,
+  createMeeting,
+  createResolution,
+  importMembers,
   createFamilyLink,
   createFamilyMember,
   createJournal,
   createKpi,
   createLoanApplication,
   createLoanVersion,
+  editPermission,
+  generateLoanSchedule,
+  payClaim,
+  quoteLoanSettlement,
+  updateRecord,
+  seedChart,
+  trialBalance,
   createLookup,
   createMember,
   createNamed,
+  closePeriod,
   createPeriod,
   createSchemeVersion,
   createSuggestion,
@@ -34,9 +54,12 @@ import {
   memberFamily,
   memberHistory,
   memberSection,
+  myChannel,
   myMember,
   postJournal,
+  recordEsgResult,
   refuseEsgResult,
+  verifySource,
   reverseJournal,
   updateEmergency,
 } from './operations.service';
@@ -93,6 +116,41 @@ export function postMember(req: Request, res: Response, next: NextFunction): voi
     })
     .parse(req.body);
   void send(res, next, () => createMember(allow(req, 'members.write'), body, req.traceId), 201);
+}
+
+export function postMemberImport(req: Request, res: Response, next: NextFunction): void {
+  const body = z
+    .object({
+      trial: z.boolean().optional(),
+      rows: z
+        .array(
+          z.object({
+            memberNo: z.string().max(80),
+            givenName: z.string().max(200),
+            familyName: z.string().max(200),
+            statusCode: z.string().max(80),
+            categoryCode: z.string().max(80),
+            employeeNo: z.string().max(80).optional(),
+            department: z.string().max(120).optional(),
+          }),
+        )
+        .max(500),
+    })
+    .parse(req.body);
+  void send(
+    res,
+    next,
+    () => importMembers(allow(req, 'members.write'), { trial: body.trial ?? false, rows: body.rows }, req.traceId),
+    200,
+  );
+}
+
+export function getMyChannel(req: Request, res: Response, next: NextFunction): void {
+  if (!req.actor) {
+    next(new ApiError(401, 'unauthorized', 'errors.unauthorized'));
+    return;
+  }
+  void send(res, next, () => myChannel({ societyId: req.actor!.societyId, userId: req.actor!.userId }));
 }
 
 export function getMyMember(req: Request, res: Response, next: NextFunction): void {
@@ -184,6 +242,33 @@ export function postCommittee(req: Request, res: Response, next: NextFunction): 
   void send(res, next, () => createNamed(allow(req, 'governance.write'), 'committee', body, req.traceId), 201);
 }
 
+export function postAppointment(req: Request, res: Response, next: NextFunction): void {
+  const body = z
+    .object({
+      memberId: z.string().uuid(),
+      roleTitle: text,
+      startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    })
+    .parse(req.body);
+  void send(res, next, () => createAppointment(allow(req, 'governance.write'), String(req.params.id), body, req.traceId), 201);
+}
+
+export function postMeeting(req: Request, res: Response, next: NextFunction): void {
+  const body = z.object({ title: text, heldOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.body);
+  void send(res, next, () => createMeeting(allow(req, 'governance.write'), String(req.params.id), body, req.traceId), 201);
+}
+
+export function postResolution(req: Request, res: Response, next: NextFunction): void {
+  const body = z.object({ title: text }).parse(req.body);
+  void send(res, next, () => createResolution(allow(req, 'governance.write'), String(req.params.id), body, req.traceId), 201);
+}
+
+export function postGovernanceDocument(req: Request, res: Response, next: NextFunction): void {
+  const body = z.object({ title: text, language: z.enum(['en', 'si', 'ta']), storageKey: text }).parse(req.body);
+  void send(res, next, () => createGovernanceDocument(allow(req, 'governance.write'), body, req.traceId), 201);
+}
+
 export function getSchemes(req: Request, res: Response, next: NextFunction): void {
   const page = pageOf(req);
   void send(res, next, () =>
@@ -199,7 +284,18 @@ export function postScheme(req: Request, res: Response, next: NextFunction): voi
 }
 
 export function postSchemeVersion(req: Request, res: Response, next: NextFunction): void {
-  void send(res, next, () => createSchemeVersion(allow(req, 'welfare.write'), String(req.params.id), req.traceId), 201);
+  const body = z
+    .object({
+      publish: z.boolean().optional(),
+      ruleBody: z.record(z.unknown()).optional(),
+    })
+    .parse(req.body ?? {});
+  void send(
+    res,
+    next,
+    () => createSchemeVersion(allow(req, 'welfare.write'), String(req.params.id), req.traceId, body),
+    201,
+  );
 }
 
 export function getClaims(req: Request, res: Response, next: NextFunction): void {
@@ -211,6 +307,10 @@ export function getClaims(req: Request, res: Response, next: NextFunction): void
   );
 }
 
+export function getClaim(req: Request, res: Response, next: NextFunction): void {
+  void send(res, next, () => listClaimEvents(allow(req, 'welfare.read'), String(req.params.id)));
+}
+
 export function postClaim(req: Request, res: Response, next: NextFunction): void {
   const body = z
     .object({
@@ -218,6 +318,10 @@ export function postClaim(req: Request, res: Response, next: NextFunction): void
       schemeVersionId: z.string().uuid(),
       idempotencyKey: text,
       familyMemberId: z.string().uuid().optional(),
+      amount: money.optional(),
+      evidenceNote: z.string().max(2000).optional(),
+      documents: z.array(z.string().max(80)).max(20).optional(),
+      contributionSatisfied: z.boolean().optional(),
     })
     .parse(req.body);
   void send(res, next, () => createClaim(allow(req, 'welfare.write'), body, req.traceId), 201);
@@ -266,6 +370,10 @@ export function postAccount(req: Request, res: Response, next: NextFunction): vo
   void send(res, next, () => createAccount(allow(req, 'ledger.post'), body, req.traceId), 201);
 }
 
+export function postClosePeriod(req: Request, res: Response, next: NextFunction): void {
+  void send(res, next, () => closePeriod(allow(req, 'ledger.post'), String(req.params.id), req.traceId));
+}
+
 export function postPeriod(req: Request, res: Response, next: NextFunction): void {
   const body = z.object({ name: text, startsOn: z.string().date(), endsOn: z.string().date() }).parse(req.body);
   void send(res, next, () => createPeriod(allow(req, 'ledger.post'), body, req.traceId), 201);
@@ -286,7 +394,15 @@ export function postJournalDocument(req: Request, res: Response, next: NextFunct
 }
 
 export function postJournalLine(req: Request, res: Response, next: NextFunction): void {
-  const body = z.object({ accountId: z.string().uuid(), debit: money.optional(), credit: money.optional(), fundId: z.string().uuid().optional() }).parse(req.body);
+  const body = z
+    .object({
+      accountId: z.string().uuid(),
+      debit: money.optional(),
+      credit: money.optional(),
+      fundId: z.string().uuid().optional(),
+      memberId: z.string().uuid().optional(),
+    })
+    .parse(req.body);
   void send(res, next, () => addJournalLine(allow(req, 'ledger.post'), String(req.params.id), body, req.traceId), 201);
 }
 
@@ -311,13 +427,52 @@ export function getLoans(req: Request, res: Response, next: NextFunction): void 
   );
 }
 
+export function getLoanApplications(req: Request, res: Response, next: NextFunction): void {
+  const page = pageOf(req);
+  void send(res, next, () =>
+    listWhere(allow(req, 'loans.read'), page.page, page.pageSize, (tx, where) =>
+      Promise.all([
+        tx.loanApplication.count({ where }),
+        tx.loanApplication.findMany({ where, take: page.pageSize, skip: (page.page - 1) * page.pageSize }),
+      ]),
+    ),
+  );
+}
+
 export function postLoan(req: Request, res: Response, next: NextFunction): void {
   const body = z.object({ name: text }).parse(req.body);
   void send(res, next, () => createNamed(allow(req, 'loans.write'), 'loanProduct', body, req.traceId), 201);
 }
 
 export function postLoanVersion(req: Request, res: Response, next: NextFunction): void {
-  void send(res, next, () => createLoanVersion(allow(req, 'loans.write'), String(req.params.id), req.traceId), 201);
+  const body = z.object({ publish: z.boolean().optional(), ruleBody: z.record(z.unknown()).optional() }).parse(req.body ?? {});
+  void send(res, next, () => createLoanVersion(allow(req, 'loans.write'), String(req.params.id), req.traceId, body), 201);
+}
+
+export function postLoanSchedule(req: Request, res: Response, next: NextFunction): void {
+  const body = z.object({ principal: money, startOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.body);
+  void send(res, next, () => generateLoanSchedule(allow(req, 'loans.write'), String(req.params.id), body, req.traceId), 201);
+}
+
+export function postChart(req: Request, res: Response, next: NextFunction): void {
+  void send(res, next, () => seedChart(allow(req, 'ledger.post'), req.traceId), 201);
+}
+
+export function getTrialBalance(req: Request, res: Response, next: NextFunction): void {
+  void send(res, next, () => trialBalance(allow(req, 'ledger.read')));
+}
+
+export function postPayClaim(req: Request, res: Response, next: NextFunction): void {
+  const body = z
+    .object({
+      periodId: z.string().uuid(),
+      expenseAccountId: z.string().uuid(),
+      cashAccountId: z.string().uuid(),
+      amount: money,
+      reason: longText,
+    })
+    .parse(req.body);
+  void send(res, next, () => payClaim(allow(req, 'ledger.post'), String(req.params.id), body, req.traceId), 200);
 }
 
 export function postLoanApplication(req: Request, res: Response, next: NextFunction): void {
@@ -337,6 +492,29 @@ export function getProjects(req: Request, res: Response, next: NextFunction): vo
 export function postProject(req: Request, res: Response, next: NextFunction): void {
   const body = z.object({ name: text, category: text }).parse(req.body);
   void send(res, next, () => createNamed(allow(req, 'projects.write'), 'project', body, req.traceId), 201);
+}
+
+export function postProjectParticipant(req: Request, res: Response, next: NextFunction): void {
+  const body = z.object({ memberId: z.string().uuid(), familyMemberId: z.string().uuid().optional() }).parse(req.body);
+  void send(res, next, () => addProjectParticipant(allow(req, 'projects.write'), String(req.params.id), body, req.traceId), 201);
+}
+
+export function postProjectExpense(req: Request, res: Response, next: NextFunction): void {
+  const body = z
+    .object({
+      description: longText,
+      amount: money,
+      periodId: z.string().uuid().optional(),
+      expenseAccountId: z.string().uuid().optional(),
+      cashAccountId: z.string().uuid().optional(),
+    })
+    .parse(req.body);
+  const scope = allow(req, 'projects.write');
+  if (body.periodId && !actor(req).permissions.includes('ledger.post')) {
+    next(new ApiError(403, 'forbidden', 'errors.forbidden'));
+    return;
+  }
+  void send(res, next, () => addProjectExpense(scope, String(req.params.id), body, req.traceId), 201);
 }
 
 export function getSuggestions(req: Request, res: Response, next: NextFunction): void {
@@ -384,7 +562,8 @@ export function postEmergency(req: Request, res: Response, next: NextFunction): 
       memberId: z.string().uuid(),
       requestType: text,
       phone: text,
-      description: longText,
+      description: z.string().max(2000).optional(),
+      locationPermitted: z.boolean().optional(),
       idempotencyKey: text,
     })
     .parse(req.body);
@@ -416,12 +595,130 @@ export function postKpi(req: Request, res: Response, next: NextFunction): void {
 }
 
 export function postEsgResult(req: Request, res: Response, next: NextFunction): void {
-  try {
-    allow(req, 'esg.read');
-    refuseEsgResult();
-  } catch (error) {
-    next(error);
+  const body = z
+    .object({
+      measure: z.enum(['participation_count', 'volunteer_hours', 'beneficiary_count', 'project_spend']).optional(),
+      periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      kpiId: z.string().uuid().optional(),
+      sources: z
+        .array(
+          z.object({
+            id: z.string().uuid(),
+            memberId: z.string().uuid().nullable().optional(),
+            familyMemberId: z.string().uuid().nullable().optional(),
+            hours: z.string().nullable().optional(),
+            amount: z.string().nullable().optional(),
+            journalDocumentId: z.string().uuid().nullable().optional(),
+          }),
+        )
+        .optional(),
+    })
+    .parse(req.body ?? {});
+  if (!body.measure || !body.periodStart || !body.periodEnd) {
+    try {
+      allow(req, 'esg.read');
+      refuseEsgResult();
+    } catch (error) {
+      next(error);
+    }
+    return;
   }
+  void send(
+    res,
+    next,
+    () =>
+      recordEsgResult(
+        allow(req, 'esg.write'),
+        {
+          measure: body.measure as 'participation_count' | 'volunteer_hours' | 'beneficiary_count' | 'project_spend',
+          periodStart: body.periodStart as string,
+          periodEnd: body.periodEnd as string,
+          kpiId: body.kpiId,
+          sources: (body.sources ?? []).map((source) => ({ ...source, verified: false })),
+        },
+        req.traceId,
+      ),
+    201,
+  );
+}
+
+export function postVerification(req: Request, res: Response, next: NextFunction): void {
+  const body = z.object({ objectType: text, objectId: z.string().uuid() }).parse(req.body);
+  void send(res, next, () => verifySource(allow(req, 'esg.write'), body, req.traceId), 201);
+}
+
+export function getTemplates(req: Request, res: Response, next: NextFunction): void {
+  const page = pageOf(req);
+  void send(res, next, () =>
+    listWhere(allow(req, 'notifications.read'), page.page, page.pageSize, (tx, where) =>
+      Promise.all([
+        tx.notificationTemplate.count({ where }),
+        tx.notificationTemplate.findMany({ where, take: page.pageSize, skip: (page.page - 1) * page.pageSize }),
+      ]),
+    ),
+  );
+}
+
+export function putTemplate(req: Request, res: Response, next: NextFunction): void {
+  const body = z.object({ body: longText }).parse(req.body);
+  void send(res, next, () => updateTemplateBody(allow(req, 'notifications.write'), String(req.params.id), body.body, req.traceId));
+}
+
+export function putCommittee(req: Request, res: Response, next: NextFunction): void {
+  const body = z.object({ name: text }).parse(req.body);
+  void send(res, next, () => updateCommitteeName(allow(req, 'governance.write'), String(req.params.id), body.name, req.traceId));
+}
+
+export function getPeriods(req: Request, res: Response, next: NextFunction): void {
+  const page = pageOf(req);
+  void send(res, next, () =>
+    listWhere(allow(req, 'ledger.read'), page.page, page.pageSize, (tx, where) =>
+      Promise.all([
+        tx.fiscalPeriod.count({ where }),
+        tx.fiscalPeriod.findMany({ where, orderBy: { startsOn: 'desc' }, take: page.pageSize, skip: (page.page - 1) * page.pageSize }),
+      ]),
+    ),
+  );
+}
+
+export function putRecord(req: Request, res: Response, next: NextFunction): void {
+  const kind = String(req.params.kind);
+  const permission = editPermission(kind);
+  if (!permission) {
+    next(new ApiError(404, 'not_found', 'errors.notFound'));
+    return;
+  }
+  const body = z.record(z.string().trim().min(1).max(2000)).parse(req.body);
+  void send(res, next, () => updateRecord(allow(req, permission), kind, String(req.params.id), body, req.traceId));
+}
+
+export function postSettlement(req: Request, res: Response, next: NextFunction): void {
+  const body = z.object({ days: z.number().int().min(0).max(3650) }).parse(req.body);
+  void send(res, next, () => quoteLoanSettlement(allow(req, 'loans.read'), String(req.params.id), body.days, req.traceId));
+}
+
+export function getRecord(req: Request, res: Response, next: NextFunction): void {
+  const permission = recordPermission(String(req.params.kind));
+  if (!permission) {
+    next(new ApiError(404, 'not_found', 'errors.notFound'));
+    return;
+  }
+  void send(res, next, () =>
+    findRecord(allow(req, permission), String(req.params.kind) as Parameters<typeof findRecord>[1], String(req.params.id)),
+  );
+}
+
+export function getApprovalRequests(req: Request, res: Response, next: NextFunction): void {
+  const page = pageOf(req);
+  void send(res, next, () =>
+    listWhere(allow(req, 'approvals.read'), page.page, page.pageSize, (tx, where) =>
+      Promise.all([
+        tx.approvalRequest.count({ where }),
+        tx.approvalRequest.findMany({ where, take: page.pageSize, skip: (page.page - 1) * page.pageSize }),
+      ]),
+    ),
+  );
 }
 
 export function postTemplate(req: Request, res: Response, next: NextFunction): void {

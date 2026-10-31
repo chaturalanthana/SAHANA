@@ -1,6 +1,15 @@
 import { Prisma } from '@prisma/client';
 import type { Page } from '@sahana/types';
-import { withSociety, type Scope } from '../../db';
+import { prisma, withSociety, type Scope } from '../../db';
+import {
+  DEFAULT_MEMBER_CATEGORIES,
+  DEFAULT_RELATIONSHIPS,
+  knownCode,
+  memberStatusAllowed,
+} from '../../domain/members';
+import { calculateEsg, type EsgMeasure, type EsgSource } from '../../domain/esg';
+import { DEFAULT_LOAN_RULE, buildSchedule, parseLoanRule, settlementAmount } from '../../domain/loans';
+import { DEFAULT_WELFARE_RULE, evaluateWelfare, parseWelfareRule } from '../../domain/welfare';
 import { ApiError } from '../../errors';
 
 function present(value: unknown): unknown {
@@ -56,6 +65,11 @@ export async function listMembers(scope: Scope, page: number, pageSize: number) 
   });
 }
 
+async function lookupCodes(tx: Prisma.TransactionClient, societyId: string, listCode: string): Promise<string[]> {
+  const rows = await tx.lookupValue.findMany({ where: { societyId, listCode }, select: { code: true } });
+  return rows.map((item) => item.code);
+}
+
 export async function createMember(
   scope: Scope,
   input: {
@@ -71,6 +85,16 @@ export async function createMember(
   traceId: string,
 ) {
   return withSociety(scope, async (tx) => {
+    const [statusCodes, categoryCodes] = await Promise.all([
+      lookupCodes(tx, scope.societyId, 'member_status'),
+      lookupCodes(tx, scope.societyId, 'member_category'),
+    ]);
+    if (!memberStatusAllowed(input.statusCode, null, statusCodes)) {
+      throw new ApiError(422, 'rule_rejected', 'errors.validation');
+    }
+    if (!knownCode(input.categoryCode, DEFAULT_MEMBER_CATEGORIES, categoryCodes)) {
+      throw new ApiError(422, 'rule_rejected', 'errors.validation');
+    }
     const created = await tx.member.create({
       data: {
         societyId: scope.societyId,
@@ -97,6 +121,225 @@ export async function createMember(
     });
     await audit(tx, scope, 'members.created', 'member', created.id, traceId);
     return row(created);
+  });
+}
+
+const recordKinds = {
+  committee: 'governance.read',
+  welfareScheme: 'welfare.read',
+  claim: 'welfare.read',
+  approvalRoute: 'approvals.read',
+  approvalRequest: 'approvals.read',
+  loanProduct: 'loans.read',
+  loanApplication: 'loans.read',
+  bankStatementLine: 'ledger.read',
+  fiscalPeriod: 'ledger.read',
+  bankAccount: 'ledger.read',
+  fixedAsset: 'ledger.read',
+  project: 'projects.read',
+  suggestion: 'projects.read',
+  emergencyRequest: 'emergency.read',
+  esgGoal: 'esg.read',
+  notificationTemplate: 'notifications.read',
+} as const;
+
+export type RecordKind = keyof typeof recordKinds;
+
+export function recordPermission(kind: string): string | null {
+  return kind in recordKinds ? recordKinds[kind as RecordKind] : null;
+}
+
+export async function findRecord(scope: Scope, kind: RecordKind, id: string) {
+  return withSociety(scope, async (tx) => {
+    const where = { id, societyId: scope.societyId };
+    const found =
+      kind === 'committee'
+        ? await tx.committee.findFirst({ where })
+        : kind === 'welfareScheme'
+          ? await tx.welfareScheme.findFirst({ where })
+          : kind === 'claim'
+            ? await tx.claim.findFirst({ where })
+            : kind === 'approvalRoute'
+              ? await tx.approvalRoute.findFirst({ where })
+              : kind === 'approvalRequest'
+                ? await tx.approvalRequest.findFirst({ where })
+                : kind === 'loanProduct'
+                  ? await tx.loanProduct.findFirst({ where })
+                  : kind === 'loanApplication'
+                    ? await tx.loanApplication.findFirst({ where })
+                    : kind === 'bankStatementLine'
+                      ? await tx.bankStatementLine.findFirst({ where })
+                      : kind === 'fiscalPeriod'
+                        ? await tx.fiscalPeriod.findFirst({ where })
+                        : kind === 'bankAccount'
+                          ? await tx.bankAccount.findFirst({ where })
+                          : kind === 'fixedAsset'
+                            ? await tx.fixedAsset.findFirst({ where })
+                            : kind === 'project'
+                      ? await tx.project.findFirst({ where })
+                      : kind === 'suggestion'
+                        ? await tx.suggestion.findFirst({ where })
+                        : kind === 'emergencyRequest'
+                          ? await tx.emergencyRequest.findFirst({ where })
+                          : kind === 'esgGoal'
+                            ? await tx.esgGoal.findFirst({ where })
+                            : await tx.notificationTemplate.findFirst({ where });
+    if (!found) throw new ApiError(404, 'not_found', 'errors.notFound');
+    if (kind === 'emergencyRequest') {
+      const notices = await tx.notificationDelivery.findMany({
+        where: { societyId: scope.societyId, objectType: 'emergency_request', objectId: id, channel: 'in_app' },
+        orderBy: { createdAt: 'asc' },
+      });
+      return { ...row(found), notices: notices.map((item) => item.messageKey) };
+    }
+    return row(found);
+  });
+}
+
+const editableFields = {
+  welfareScheme: ['name'],
+  loanProduct: ['name'],
+  esgGoal: ['name'],
+  project: ['name', 'category'],
+  approvalRoute: ['name'],
+  claim: ['evidenceNote'],
+  fixedAsset: ['name'],
+  bankAccount: ['name'],
+} as const;
+
+export function editPermission(kind: string): string | null {
+  switch (kind) {
+    case 'welfareScheme':
+      return 'welfare.write';
+    case 'loanProduct':
+      return 'loans.write';
+    case 'esgGoal':
+      return 'esg.write';
+    case 'project':
+      return 'projects.write';
+    case 'approvalRoute':
+      return 'approvals.read';
+    case 'claim':
+      return 'welfare.write';
+    case 'fixedAsset':
+    case 'bankAccount':
+      return 'ledger.post';
+    default:
+      return null;
+  }
+}
+
+export async function updateRecord(scope: Scope, kind: string, id: string, input: Record<string, string>, traceId: string) {
+  const allowed: readonly string[] | null = kind in editableFields ? editableFields[kind as keyof typeof editableFields] : null;
+  if (!allowed) throw new ApiError(404, 'not_found', 'errors.notFound');
+  const keys = Object.keys(input);
+  if (keys.length === 0 || keys.some((key) => !allowed.includes(key))) {
+    throw new ApiError(422, 'validation', 'errors.validation');
+  }
+  return withSociety(scope, async (tx) => {
+    const where = { id, societyId: scope.societyId };
+    if (kind === 'claim') {
+      const claim = await tx.claim.findFirst({ where });
+      if (!claim) throw new ApiError(404, 'not_found', 'errors.notFound');
+      if (claim.status === 'paid' || claim.status === 'rejected') throw new ApiError(409, 'immutable', 'modules.error.immutable');
+      const updated = await tx.claim.update({ where: { id }, data: { evidenceNote: input.evidenceNote ?? claim.evidenceNote } });
+      await audit(tx, scope, 'claims.evidence_updated', 'claim', id, traceId);
+      return row(updated);
+    }
+    if (kind === 'fixedAsset') {
+      const asset = await tx.fixedAsset.findFirst({ where });
+      if (!asset) throw new ApiError(404, 'not_found', 'errors.notFound');
+      if (asset.disposedAt) throw new ApiError(409, 'immutable', 'modules.error.immutable');
+      const updated = await tx.fixedAsset.update({ where: { id }, data: { name: input.name ?? asset.name } });
+      await audit(tx, scope, 'ledger.asset_renamed', 'fixed_asset', id, traceId);
+      return row(updated);
+    }
+    if (kind === 'bankAccount') {
+      const bank = await tx.bankAccount.findFirst({ where });
+      if (!bank) throw new ApiError(404, 'not_found', 'errors.notFound');
+      const updated = await tx.bankAccount.update({ where: { id }, data: { name: input.name ?? bank.name } });
+      await audit(tx, scope, 'ledger.bank_renamed', 'bank_account', id, traceId);
+      return row(updated);
+    }
+    if (kind === 'welfareScheme') {
+      const existing = await tx.welfareScheme.findFirst({ where });
+      if (!existing) throw new ApiError(404, 'not_found', 'errors.notFound');
+      const updated = await tx.welfareScheme.update({ where: { id }, data: { name: input.name ?? existing.name } });
+      await audit(tx, scope, 'welfare.scheme_renamed', 'welfare_scheme', id, traceId);
+      return row(updated);
+    }
+    if (kind === 'loanProduct') {
+      const existing = await tx.loanProduct.findFirst({ where });
+      if (!existing) throw new ApiError(404, 'not_found', 'errors.notFound');
+      const updated = await tx.loanProduct.update({ where: { id }, data: { name: input.name ?? existing.name } });
+      await audit(tx, scope, 'loans.product_renamed', 'loan_product', id, traceId);
+      return row(updated);
+    }
+    if (kind === 'esgGoal') {
+      const existing = await tx.esgGoal.findFirst({ where });
+      if (!existing) throw new ApiError(404, 'not_found', 'errors.notFound');
+      const updated = await tx.esgGoal.update({ where: { id }, data: { name: input.name ?? existing.name } });
+      await audit(tx, scope, 'esg.goal_renamed', 'esg_goal', id, traceId);
+      return row(updated);
+    }
+    if (kind === 'project') {
+      const existing = await tx.project.findFirst({ where });
+      if (!existing) throw new ApiError(404, 'not_found', 'errors.notFound');
+      const updated = await tx.project.update({
+        where: { id },
+        data: { name: input.name ?? existing.name, category: input.category ?? existing.category },
+      });
+      await audit(tx, scope, 'projects.updated', 'project', id, traceId);
+      return row(updated);
+    }
+    const existing = await tx.approvalRoute.findFirst({ where });
+    if (!existing) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const updated = await tx.approvalRoute.update({ where: { id }, data: { name: input.name ?? existing.name } });
+    await audit(tx, scope, 'approvals.route_renamed', 'approval_route', id, traceId);
+    return row(updated);
+  });
+}
+
+export async function updateCommitteeName(scope: Scope, id: string, name: string, traceId: string) {
+  return withSociety(scope, async (tx) => {
+    const existing = await tx.committee.findFirst({ where: { id, societyId: scope.societyId } });
+    if (!existing) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const updated = await tx.committee.update({ where: { id }, data: { name } });
+    await audit(tx, scope, 'governance.committee_renamed', 'committee', id, traceId);
+    return row(updated);
+  });
+}
+
+export async function updateTemplateBody(scope: Scope, id: string, body: string, traceId: string) {
+  return withSociety(scope, async (tx) => {
+    const existing = await tx.notificationTemplate.findFirst({ where: { id, societyId: scope.societyId } });
+    if (!existing) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const updated = await tx.notificationTemplate.update({ where: { id }, data: { body } });
+    await audit(tx, scope, 'notifications.template_updated', 'notification_template', id, traceId);
+    return row(updated);
+  });
+}
+
+export async function myChannel(scope: Scope) {
+  return withSociety(scope, async (tx) => {
+    const member = await tx.member.findFirst({ where: { societyId: scope.societyId, userId: scope.userId } });
+    if (!member) return { member: null, claims: [], emergencies: [], family: [] };
+    const [claims, emergencies, family] = await Promise.all([
+      tx.claim.findMany({ where: { societyId: scope.societyId, memberId: member.id }, orderBy: { createdAt: 'desc' }, take: 25 }),
+      tx.emergencyRequest.findMany({
+        where: { societyId: scope.societyId, memberId: member.id },
+        orderBy: { createdAt: 'desc' },
+        take: 25,
+        select: { id: true, requestType: true, status: true, phone: true, createdAt: true },
+      }),
+      tx.memberFamilyLink.findMany({ where: { societyId: scope.societyId, memberId: member.id }, take: 25 }),
+    ]);
+    return {
+      member: row(member),
+      claims: claims.map((item) => row(item)),
+      emergencies: emergencies.map((item) => row(item)),
+      family: family.map((item) => ({ id: item.id, relationshipCode: item.relationshipCode })),
+    };
   });
 }
 
@@ -142,7 +385,11 @@ export async function changeMemberStatus(
   traceId: string,
 ) {
   return withSociety(scope, async (tx) => {
-    await requireMember(tx, scope, memberId);
+    const member = await requireMember(tx, scope, memberId);
+    const statusCodes = await lookupCodes(tx, scope.societyId, 'member_status');
+    if (!memberStatusAllowed(input.statusCode, member.statusCode, statusCodes)) {
+      throw new ApiError(422, 'rule_rejected', 'errors.validation');
+    }
     await tx.memberStatusHistory.create({
       data: {
         societyId: scope.societyId,
@@ -195,6 +442,10 @@ export async function addMemberFamily(
 ) {
   return withSociety(scope, async (tx) => {
     await requireMember(tx, scope, memberId);
+    const relationships = await lookupCodes(tx, scope.societyId, 'family_relationship');
+    if (!knownCode(input.relationshipCode, DEFAULT_RELATIONSHIPS, relationships)) {
+      throw new ApiError(422, 'rule_rejected', 'errors.validation');
+    }
     const person = await tx.familyMember.create({
       data: {
         societyId: scope.societyId,
@@ -354,17 +605,25 @@ export async function createNamed(
   });
 }
 
-export async function createSchemeVersion(scope: Scope, schemeId: string, traceId: string) {
+export async function createSchemeVersion(
+  scope: Scope,
+  schemeId: string,
+  traceId: string,
+  input?: { publish?: boolean; ruleBody?: unknown },
+) {
   return withSociety(scope, async (tx) => {
     const scheme = await tx.welfareScheme.findFirst({ where: { id: schemeId, societyId: scope.societyId } });
     if (!scheme) throw new ApiError(404, 'not_found', 'errors.notFound');
     const count = await tx.welfareSchemeVersion.count({ where: { schemeId } });
+    const publish = input?.publish === true;
+    const ruleBody = publish ? (parseWelfareRule(input?.ruleBody) ?? DEFAULT_WELFARE_RULE) : {};
     const created = await tx.welfareSchemeVersion.create({
       data: {
         societyId: scope.societyId,
         schemeId,
         versionNo: count + 1,
-        ruleBody: {},
+        ruleBody,
+        publishedAt: publish ? new Date() : null,
         createdBy: scope.userId,
       },
     });
@@ -375,7 +634,16 @@ export async function createSchemeVersion(scope: Scope, schemeId: string, traceI
 
 export async function createClaim(
   scope: Scope,
-  input: { memberId: string; schemeVersionId: string; idempotencyKey: string; familyMemberId?: string },
+  input: {
+    memberId: string;
+    schemeVersionId: string;
+    idempotencyKey: string;
+    familyMemberId?: string;
+    amount?: string;
+    evidenceNote?: string;
+    documents?: string[];
+    contributionSatisfied?: boolean;
+  },
   traceId: string,
 ) {
   return withSociety(scope, async (tx) => {
@@ -388,6 +656,40 @@ export async function createClaim(
     });
     const member = await tx.member.findFirst({ where: { id: input.memberId, societyId: scope.societyId } });
     if (!version || !member) throw new ApiError(404, 'not_found', 'errors.notFound');
+    let relationship: string | null = null;
+    if (input.familyMemberId) {
+      const link = await tx.memberFamilyLink.findFirst({
+        where: { societyId: scope.societyId, memberId: input.memberId, familyMemberId: input.familyMemberId },
+      });
+      if (!link) throw new ApiError(404, 'not_found', 'errors.notFound');
+      relationship = link.relationshipCode;
+    }
+    const rule = version.publishedAt ? parseWelfareRule(version.ruleBody) : null;
+    let eligibilityStatus = 'not_calculated';
+    let eligibilityReason = '';
+    if (rule) {
+      const priorClaims = await tx.claim.count({
+        where: {
+          societyId: scope.societyId,
+          memberId: input.memberId,
+          schemeVersionId: version.id,
+          eligibilityStatus: 'eligible',
+        },
+      });
+      const decision = evaluateWelfare({
+        rule,
+        memberStatus: member.statusCode,
+        memberSince: member.createdAt,
+        asOf: new Date(),
+        relationship,
+        amount: input.amount ?? null,
+        documents: input.documents ?? [],
+        priorClaims,
+        contributionSatisfied: input.contributionSatisfied ?? !rule.contributionRequired,
+      });
+      eligibilityStatus = decision.status;
+      eligibilityReason = decision.reason;
+    }
     const created = await tx.claim.create({
       data: {
         societyId: scope.societyId,
@@ -395,7 +697,22 @@ export async function createClaim(
         familyMemberId: input.familyMemberId,
         schemeVersionId: input.schemeVersionId,
         idempotencyKey: input.idempotencyKey,
-        eligibilityStatus: 'not_calculated',
+        eligibilityStatus,
+        eligibilityReason,
+        evidenceNote: input.evidenceNote ?? '',
+        amount: input.amount ?? null,
+        createdBy: scope.userId,
+      },
+    });
+    await tx.notificationDelivery.create({
+      data: {
+        societyId: scope.societyId,
+        memberId: input.memberId,
+        channel: 'in_app',
+        status: 'delivered',
+        messageKey: 'modules.welfare.hint',
+        objectType: 'claim',
+        objectId: created.id,
         createdBy: scope.userId,
       },
     });
@@ -412,10 +729,26 @@ export async function createClaim(
   });
 }
 
+export async function listClaimEvents(scope: Scope, claimId: string) {
+  return withSociety(scope, async (tx) => {
+    const claim = await tx.claim.findFirst({ where: { id: claimId, societyId: scope.societyId } });
+    if (!claim) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const events = await tx.claimEvent.findMany({ where: { societyId: scope.societyId, claimId }, orderBy: { createdAt: 'asc' } });
+    const requests = await tx.approvalRequest.findMany({
+      where: { societyId: scope.societyId, objectType: 'claim', objectId: claimId },
+    });
+    const decisions = await tx.approvalDecision.findMany({
+      where: { societyId: scope.societyId, requestId: { in: requests.map((item) => item.id) } },
+      orderBy: { createdAt: 'asc' },
+    });
+    return { claim: row(claim), events: events.map((item) => row(item)), decisions: decisions.map((item) => row(item)) };
+  });
+}
+
 export async function createApprovalRoute(scope: Scope, name: string, traceId: string) {
   return withSociety(scope, async (tx) => {
     const created = await tx.approvalRoute.create({
-      data: { societyId: scope.societyId, name, policyStatus: 'stored_not_in_force', createdBy: scope.userId },
+      data: { societyId: scope.societyId, name, policyStatus: 'in_force', allowSelfApproval: false, createdBy: scope.userId },
     });
     await audit(tx, scope, 'approvals.route_stored', 'approval_route', created.id, traceId);
     return row(created);
@@ -448,10 +781,22 @@ export async function createApprovalDecision(
   return withSociety(scope, async (tx) => {
     const request = await tx.approvalRequest.findFirst({ where: { id: requestId, societyId: scope.societyId } });
     if (!request) throw new ApiError(404, 'not_found', 'errors.notFound');
-    if (request.createdBy === scope.userId) throw new ApiError(403, 'self_approval', 'config.critical.selfApproval');
+    if (request.createdBy === scope.userId) {
+      const route = request.routeId
+        ? await tx.approvalRoute.findFirst({ where: { id: request.routeId, societyId: scope.societyId } })
+        : null;
+      if (!route?.allowSelfApproval) throw new ApiError(403, 'self_approval', 'config.critical.selfApproval');
+    }
     const created = await tx.approvalDecision.create({
       data: { societyId: scope.societyId, requestId, ...input, createdBy: scope.userId },
     });
+    if (request.objectType === 'claim') {
+      const nextStatus = input.decision === 'approve' ? 'approved' : input.decision === 'reject' ? 'rejected' : 'returned';
+      await tx.claim.updateMany({
+        where: { id: request.objectId, societyId: scope.societyId },
+        data: { status: nextStatus },
+      });
+    }
     await audit(tx, scope, 'approvals.decided', 'approval_decision', created.id, traceId);
     return row(created);
   });
@@ -491,6 +836,21 @@ export async function createPeriod(
   });
 }
 
+export async function closePeriod(scope: Scope, periodId: string, traceId: string) {
+  return withSociety(scope, async (tx) => {
+    const period = await tx.fiscalPeriod.findFirst({ where: { id: periodId, societyId: scope.societyId } });
+    if (!period) throw new ApiError(404, 'not_found', 'errors.notFound');
+    if (period.status === 'closed') throw new ApiError(409, 'period_closed', 'modules.error.periodClosed');
+    const drafts = await tx.journalDocument.count({
+      where: { societyId: scope.societyId, periodId, status: 'draft' },
+    });
+    if (drafts > 0) throw new ApiError(409, 'conflict', 'modules.error.unbalanced');
+    const updated = await tx.fiscalPeriod.update({ where: { id: periodId }, data: { status: 'closed' } });
+    await audit(tx, scope, 'ledger.period_closed', 'fiscal_period', periodId, traceId);
+    return row(updated);
+  });
+}
+
 export async function createJournal(scope: Scope, input: { periodId: string; reason: string }, traceId: string) {
   return withSociety(scope, async (tx) => {
     const period = await tx.fiscalPeriod.findFirst({ where: { id: input.periodId, societyId: scope.societyId } });
@@ -507,7 +867,7 @@ export async function createJournal(scope: Scope, input: { periodId: string; rea
 export async function addJournalLine(
   scope: Scope,
   documentId: string,
-  input: { accountId: string; debit?: string; credit?: string; fundId?: string },
+  input: { accountId: string; debit?: string; credit?: string; fundId?: string; memberId?: string },
   traceId: string,
 ) {
   return withSociety(scope, async (tx) => {
@@ -520,6 +880,7 @@ export async function addJournalLine(
         documentId,
         accountId: input.accountId,
         fundId: input.fundId,
+        memberId: input.memberId,
         debit: new Prisma.Decimal(input.debit ?? '0'),
         credit: new Prisma.Decimal(input.credit ?? '0'),
       },
@@ -567,17 +928,24 @@ export async function reverseJournal(scope: Scope, documentId: string, reason: s
   }
 }
 
-export async function createLoanVersion(scope: Scope, productId: string, traceId: string) {
+export async function createLoanVersion(
+  scope: Scope,
+  productId: string,
+  traceId: string,
+  input?: { publish?: boolean; ruleBody?: unknown },
+) {
   return withSociety(scope, async (tx) => {
     const product = await tx.loanProduct.findFirst({ where: { id: productId, societyId: scope.societyId } });
     if (!product) throw new ApiError(404, 'not_found', 'errors.notFound');
     const count = await tx.loanProductVersion.count({ where: { productId } });
+    const publish = input?.publish === true;
     const created = await tx.loanProductVersion.create({
       data: {
         societyId: scope.societyId,
         productId,
         versionNo: count + 1,
-        ruleBody: {},
+        ruleBody: publish ? (parseLoanRule(input?.ruleBody) ?? DEFAULT_LOAN_RULE) : {},
+        publishedAt: publish ? new Date() : null,
         createdBy: scope.userId,
       },
     });
@@ -601,6 +969,218 @@ export async function createLoanApplication(
       data: { societyId: scope.societyId, ...input, createdBy: scope.userId },
     });
     await audit(tx, scope, 'loans.application_recorded', 'loan_application', created.id, traceId);
+    return row(created);
+  });
+}
+
+const CHART = [
+  ['1000', 'Cash', 'asset'],
+  ['1100', 'Bank', 'asset'],
+  ['1200', 'Contributions receivable', 'asset'],
+  ['1300', 'Loans receivable', 'asset'],
+  ['2000', 'Welfare payable', 'liability'],
+  ['3000', 'Member fund', 'equity'],
+  ['4000', 'Contribution income', 'income'],
+  ['4100', 'Interest income', 'income'],
+  ['5000', 'Welfare expense', 'expense'],
+  ['5100', 'Project expense', 'expense'],
+] as const;
+
+export async function seedChart(scope: Scope, traceId: string) {
+  return withSociety(scope, async (tx) => {
+    const created: string[] = [];
+    for (const [code, name, accountType] of CHART) {
+      const existing = await tx.account.findFirst({ where: { societyId: scope.societyId, code } });
+      if (existing) continue;
+      const account = await tx.account.create({
+        data: {
+          societyId: scope.societyId,
+          code,
+          name,
+          accountType,
+          isCash: code === '1000' || code === '1100',
+          createdBy: scope.userId,
+        },
+      });
+      created.push(account.id);
+    }
+    await audit(tx, scope, 'ledger.chart_seeded', 'account', scope.societyId, traceId);
+    return { created: created.length };
+  });
+}
+
+export async function trialBalance(scope: Scope) {
+  return withSociety(scope, async (tx) => {
+    const accounts = await tx.account.findMany({ where: { societyId: scope.societyId }, orderBy: { code: 'asc' } });
+    const posted = await tx.journalDocument.findMany({
+      where: { societyId: scope.societyId, status: 'posted' },
+      select: { id: true },
+    });
+    const lines = await tx.journalLine.findMany({
+      where: { societyId: scope.societyId, documentId: { in: posted.map((item) => item.id) } },
+    });
+    const totals = new Map<string, { debit: Prisma.Decimal; credit: Prisma.Decimal }>();
+    for (const line of lines) {
+      const current = totals.get(line.accountId) ?? { debit: new Prisma.Decimal(0), credit: new Prisma.Decimal(0) };
+      current.debit = current.debit.plus(line.debit);
+      current.credit = current.credit.plus(line.credit);
+      totals.set(line.accountId, current);
+    }
+    let debit = new Prisma.Decimal(0);
+    let credit = new Prisma.Decimal(0);
+    const items = accounts.map((account) => {
+      const sum = totals.get(account.id) ?? { debit: new Prisma.Decimal(0), credit: new Prisma.Decimal(0) };
+      debit = debit.plus(sum.debit);
+      credit = credit.plus(sum.credit);
+      return { code: account.code, name: account.name, accountType: account.accountType, debit: sum.debit.toString(), credit: sum.credit.toString() };
+    });
+    return { items, debit: debit.toString(), credit: credit.toString(), balanced: debit.equals(credit) };
+  });
+}
+
+export async function generateLoanSchedule(
+  scope: Scope,
+  applicationId: string,
+  input: { principal: string; startOn: string },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const application = await tx.loanApplication.findFirst({ where: { id: applicationId, societyId: scope.societyId } });
+    if (!application) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const version = await tx.loanProductVersion.findFirst({
+      where: { id: application.productVersionId, societyId: scope.societyId },
+    });
+    const rule = version?.publishedAt ? parseLoanRule(version.ruleBody) : null;
+    if (!rule) throw new ApiError(409, 'not_calculated', 'modules.error.notCalculated');
+    await tx.loanScheduleLine.deleteMany({ where: { societyId: scope.societyId, applicationId } });
+    const lines = buildSchedule(input.principal, rule, new Date(input.startOn));
+    for (const line of lines) {
+      await tx.loanScheduleLine.create({
+        data: {
+          societyId: scope.societyId,
+          applicationId,
+          installmentNo: line.installmentNo,
+          dueOn: new Date(line.dueOn),
+          principal: line.principal,
+          interest: line.interest,
+          fee: line.fee,
+        },
+      });
+    }
+    await audit(tx, scope, 'loans.schedule_generated', 'loan_application', applicationId, traceId);
+    return { items: lines };
+  });
+}
+
+export async function payClaim(
+  scope: Scope,
+  claimId: string,
+  input: { periodId: string; expenseAccountId: string; cashAccountId: string; amount: string; reason: string },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const claim = await tx.claim.findFirst({ where: { id: claimId, societyId: scope.societyId } });
+    if (!claim) throw new ApiError(404, 'not_found', 'errors.notFound');
+    if (claim.status === 'paid') throw new ApiError(409, 'conflict', 'modules.error.immutable');
+    if (claim.status !== 'approved' && claim.status !== 'payable') {
+      throw new ApiError(409, 'conflict', 'errors.validation');
+    }
+    const document = await tx.journalDocument.create({
+      data: { societyId: scope.societyId, periodId: input.periodId, reason: input.reason, createdBy: scope.userId },
+    });
+    await tx.journalLine.create({
+      data: {
+        societyId: scope.societyId,
+        documentId: document.id,
+        accountId: input.expenseAccountId,
+        debit: new Prisma.Decimal(input.amount),
+        credit: new Prisma.Decimal(0),
+      },
+    });
+    await tx.journalLine.create({
+      data: {
+        societyId: scope.societyId,
+        documentId: document.id,
+        accountId: input.cashAccountId,
+        debit: new Prisma.Decimal(0),
+        credit: new Prisma.Decimal(input.amount),
+      },
+    });
+    await tx.$executeRaw`SELECT app_post_journal(${document.id}::uuid, ${scope.societyId}::uuid, ${scope.userId}::uuid)`;
+    await tx.claim.update({ where: { id: claimId }, data: { status: 'paid' } });
+    await audit(tx, scope, 'claims.paid', 'claim', claimId, traceId);
+    return { id: claimId, journalDocumentId: document.id, status: 'paid' };
+  });
+}
+
+export async function addProjectParticipant(
+  scope: Scope,
+  projectId: string,
+  input: { memberId: string; familyMemberId?: string },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const project = await tx.project.findFirst({ where: { id: projectId, societyId: scope.societyId } });
+    const member = await tx.member.findFirst({ where: { id: input.memberId, societyId: scope.societyId } });
+    if (!project || !member) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const created = await tx.projectParticipant.create({
+      data: { societyId: scope.societyId, projectId, memberId: input.memberId, familyMemberId: input.familyMemberId },
+    });
+    await audit(tx, scope, 'projects.participant_added', 'project_participant', created.id, traceId);
+    return row(created);
+  });
+}
+
+export async function addProjectExpense(
+  scope: Scope,
+  projectId: string,
+  input: { description: string; amount: string; periodId?: string; expenseAccountId?: string; cashAccountId?: string },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const project = await tx.project.findFirst({ where: { id: projectId, societyId: scope.societyId } });
+    if (!project) throw new ApiError(404, 'not_found', 'errors.notFound');
+    let journalDocumentId: string | null = null;
+    if (input.periodId && input.expenseAccountId && input.cashAccountId) {
+      const document = await tx.journalDocument.create({
+        data: {
+          societyId: scope.societyId,
+          periodId: input.periodId,
+          reason: input.description,
+          createdBy: scope.userId,
+        },
+      });
+      await tx.journalLine.create({
+        data: {
+          societyId: scope.societyId,
+          documentId: document.id,
+          accountId: input.expenseAccountId,
+          debit: new Prisma.Decimal(input.amount),
+          credit: new Prisma.Decimal(0),
+        },
+      });
+      await tx.journalLine.create({
+        data: {
+          societyId: scope.societyId,
+          documentId: document.id,
+          accountId: input.cashAccountId,
+          debit: new Prisma.Decimal(0),
+          credit: new Prisma.Decimal(input.amount),
+        },
+      });
+      await tx.$executeRaw`SELECT app_post_journal(${document.id}::uuid, ${scope.societyId}::uuid, ${scope.userId}::uuid)`;
+      journalDocumentId = document.id;
+    }
+    const created = await tx.projectExpense.create({
+      data: {
+        societyId: scope.societyId,
+        projectId,
+        description: input.description,
+        amount: new Prisma.Decimal(input.amount),
+        journalDocumentId,
+      },
+    });
+    await audit(tx, scope, 'projects.expense_recorded', 'project_expense', created.id, traceId);
     return row(created);
   });
 }
@@ -633,9 +1213,21 @@ export async function decideSuggestion(
   return withSociety(scope, async (tx) => {
     const existing = await tx.suggestion.findFirst({ where: { id: suggestionId, societyId: scope.societyId } });
     if (!existing) throw new ApiError(404, 'not_found', 'errors.notFound');
+    let projectId = input.projectId;
+    if (input.status === 'accepted' && !projectId) {
+      const project = await tx.project.create({
+        data: {
+          societyId: scope.societyId,
+          name: existing.body.slice(0, 80),
+          category: 'suggestion',
+          createdBy: scope.userId,
+        },
+      });
+      projectId = project.id;
+    }
     const updated = await tx.suggestion.update({
       where: { id: suggestionId },
-      data: { status: input.status, projectId: input.projectId },
+      data: { status: input.status, projectId },
     });
     await tx.suggestionEvent.create({
       data: {
@@ -652,7 +1244,14 @@ export async function decideSuggestion(
 
 export async function createEmergency(
   scope: Scope,
-  input: { memberId: string; requestType: string; phone: string; description: string; idempotencyKey: string },
+  input: {
+    memberId: string;
+    requestType: string;
+    phone: string;
+    description?: string;
+    idempotencyKey: string;
+    locationPermitted?: boolean;
+  },
   traceId: string,
 ) {
   return withSociety(scope, async (tx) => {
@@ -663,7 +1262,17 @@ export async function createEmergency(
     const member = await tx.member.findFirst({ where: { id: input.memberId, societyId: scope.societyId } });
     if (!member) throw new ApiError(404, 'not_found', 'errors.notFound');
     const created = await tx.emergencyRequest.create({
-      data: { societyId: scope.societyId, ...input, locationPermitted: false, createdBy: scope.userId },
+      data: {
+        societyId: scope.societyId,
+        memberId: input.memberId,
+        requestType: input.requestType,
+        phone: input.phone,
+        description: input.description ?? '',
+        idempotencyKey: input.idempotencyKey,
+        locationPermitted: input.locationPermitted ?? false,
+        status: 'submitted',
+        createdBy: scope.userId,
+      },
     });
     await audit(tx, scope, 'emergency.submitted', 'emergency_request', created.id, traceId);
     return row(created);
@@ -711,26 +1320,234 @@ export function refuseEsgResult(): never {
   throw new ApiError(409, 'not_calculated', 'modules.error.notCalculated');
 }
 
+export async function verifySource(
+  scope: Scope,
+  input: { objectType: string; objectId: string },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const created = await tx.sourceVerification.create({
+      data: { societyId: scope.societyId, objectType: input.objectType, objectId: input.objectId, createdBy: scope.userId },
+    });
+    await audit(tx, scope, 'esg.source_verified', input.objectType, input.objectId, traceId);
+    return row(created);
+  });
+}
+
+export async function recordEsgResult(
+  scope: Scope,
+  input: {
+    measure: EsgMeasure;
+    periodStart: string;
+    periodEnd: string;
+    kpiId?: string;
+    sources: EsgSource[];
+  },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const verified = await tx.sourceVerification.findMany({
+      where: { societyId: scope.societyId, objectId: { in: input.sources.map((source) => source.id) } },
+    });
+    const verifiedIds = new Set(verified.map((item) => item.objectId));
+    const result = calculateEsg(
+      input.measure,
+      input.sources.map((source) => ({ ...source, verified: verifiedIds.has(source.id) })),
+    );
+    const created = await tx.esgResult.create({
+      data: {
+        societyId: scope.societyId,
+        kpiId: input.kpiId,
+        measure: input.measure,
+        periodStart: new Date(input.periodStart),
+        periodEnd: new Date(input.periodEnd),
+        verifiedTotal: result.verifiedTotal,
+        unverifiedCount: result.unverifiedCount,
+        sourceIds: result.sourceIds,
+        createdBy: scope.userId,
+      },
+    });
+    await audit(tx, scope, 'esg.result_recorded', 'esg_result', created.id, traceId);
+    return { ...row(created), verifiedTotal: result.verifiedTotal, unverifiedCount: result.unverifiedCount, sourceIds: result.sourceIds };
+  });
+}
+
 export async function createTemplate(
   scope: Scope,
   input: { code: string; language: 'en' | 'si' | 'ta'; body: string; channel?: string },
   traceId: string,
 ) {
-  if (input.channel && input.channel !== 'in_app') {
+  if (input.channel === 'whatsapp') {
     throw new ApiError(400, 'channel_disabled', 'modules.error.channelDisabled');
   }
+  const channel = input.channel === 'email' || input.channel === 'sms' ? input.channel : 'in_app';
   return withSociety(scope, async (tx) => {
     const created = await tx.notificationTemplate.create({
       data: {
         societyId: scope.societyId,
         code: input.code,
         language: input.language,
-        channel: 'in_app',
+        channel,
         body: input.body,
         createdBy: scope.userId,
       },
     });
     await audit(tx, scope, 'notifications.template_stored', 'notification_template', created.id, traceId);
+    return row(created);
+  });
+}
+
+type ImportRow = {
+  memberNo: string;
+  givenName: string;
+  familyName: string;
+  statusCode: string;
+  categoryCode: string;
+  employeeNo?: string;
+  department?: string;
+};
+
+export async function importMembers(
+  scope: Scope,
+  input: { trial: boolean; rows: ImportRow[] },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const [statusCodes, categoryCodes, existing] = await Promise.all([
+      lookupCodes(tx, scope.societyId, 'member_status'),
+      lookupCodes(tx, scope.societyId, 'member_category'),
+      tx.member.findMany({ where: { societyId: scope.societyId }, select: { memberNo: true } }),
+    ]);
+    const seen = new Set(existing.map((item) => item.memberNo));
+    const rejected: { row: number; memberNo: string; messageKey: string }[] = [];
+    input.rows.forEach((item, index) => {
+      if (!item.memberNo || !item.givenName || !item.familyName) {
+        rejected.push({ row: index + 1, memberNo: item.memberNo ?? '', messageKey: 'errors.validation' });
+        return;
+      }
+      if (seen.has(item.memberNo)) {
+        rejected.push({ row: index + 1, memberNo: item.memberNo, messageKey: 'errors.validation' });
+        return;
+      }
+      if (!memberStatusAllowed(item.statusCode, null, statusCodes)) {
+        rejected.push({ row: index + 1, memberNo: item.memberNo, messageKey: 'errors.validation' });
+        return;
+      }
+      if (!knownCode(item.categoryCode, DEFAULT_MEMBER_CATEGORIES, categoryCodes)) {
+        rejected.push({ row: index + 1, memberNo: item.memberNo, messageKey: 'errors.validation' });
+        return;
+      }
+      seen.add(item.memberNo);
+    });
+    if (rejected.length > 0 || input.trial) {
+      return { trial: input.trial, created: 0, rejected, accepted: input.rows.length - rejected.length };
+    }
+    for (const item of input.rows) {
+      const created = await tx.member.create({
+        data: {
+          societyId: scope.societyId,
+          memberNo: item.memberNo,
+          givenName: item.givenName,
+          familyName: item.familyName,
+          employeeNo: item.employeeNo ?? '',
+          department: item.department ?? '',
+          statusCode: item.statusCode,
+          categoryCode: item.categoryCode,
+          createdBy: scope.userId,
+          updatedBy: scope.userId,
+        },
+      });
+      await tx.memberStatusHistory.create({
+        data: {
+          societyId: scope.societyId,
+          memberId: created.id,
+          statusCode: item.statusCode,
+          reason: 'Imported',
+          createdBy: scope.userId,
+        },
+      });
+    }
+    await audit(tx, scope, 'members.imported', 'member', scope.societyId, traceId);
+    return { trial: false, created: input.rows.length, rejected: [], accepted: input.rows.length };
+  });
+}
+
+export async function createAppointment(
+  scope: Scope,
+  committeeId: string,
+  input: { memberId: string; roleTitle: string; startsOn: string; endsOn?: string },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const committee = await tx.committee.findFirst({ where: { id: committeeId, societyId: scope.societyId } });
+    const member = await tx.member.findFirst({ where: { id: input.memberId, societyId: scope.societyId } });
+    if (!committee || !member) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const created = await tx.committeeAppointment.create({
+      data: {
+        societyId: scope.societyId,
+        committeeId,
+        memberId: input.memberId,
+        roleTitle: input.roleTitle,
+        startsOn: new Date(input.startsOn),
+        endsOn: input.endsOn ? new Date(input.endsOn) : null,
+        createdBy: scope.userId,
+      },
+    });
+    await audit(tx, scope, 'governance.appointed', 'committee_appointment', created.id, traceId);
+    return row(created);
+  });
+}
+
+export async function createMeeting(
+  scope: Scope,
+  committeeId: string,
+  input: { title: string; heldOn: string },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const committee = await tx.committee.findFirst({ where: { id: committeeId, societyId: scope.societyId } });
+    if (!committee) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const created = await tx.meeting.create({
+      data: {
+        societyId: scope.societyId,
+        committeeId,
+        title: input.title,
+        heldOn: new Date(input.heldOn),
+        createdBy: scope.userId,
+      },
+    });
+    await audit(tx, scope, 'governance.meeting_recorded', 'meeting', created.id, traceId);
+    return row(created);
+  });
+}
+
+export async function createResolution(
+  scope: Scope,
+  meetingId: string,
+  input: { title: string },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const meeting = await tx.meeting.findFirst({ where: { id: meetingId, societyId: scope.societyId } });
+    if (!meeting) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const created = await tx.resolution.create({
+      data: { societyId: scope.societyId, meetingId, title: input.title, createdBy: scope.userId },
+    });
+    await audit(tx, scope, 'governance.resolution_recorded', 'resolution', created.id, traceId);
+    return row(created);
+  });
+}
+
+export async function createGovernanceDocument(
+  scope: Scope,
+  input: { title: string; language: string; storageKey: string },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const created = await tx.governanceDocument.create({
+      data: { societyId: scope.societyId, ...input, createdBy: scope.userId },
+    });
+    await audit(tx, scope, 'governance.document_recorded', 'governance_document', created.id, traceId);
     return row(created);
   });
 }
@@ -747,4 +1564,100 @@ export async function createApprovalRequest(
     await audit(tx, scope, 'approvals.requested', 'approval_request', created.id, traceId);
     return row(created);
   });
+}
+
+const ACK_MS = 4 * 60 * 60 * 1000;
+const ESCALATE_MS = 8 * 60 * 60 * 1000;
+
+export async function quoteLoanSettlement(scope: Scope, applicationId: string, days: number, traceId: string) {
+  return withSociety(scope, async (tx) => {
+    const application = await tx.loanApplication.findFirst({ where: { id: applicationId, societyId: scope.societyId } });
+    if (!application) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const version = await tx.loanProductVersion.findFirst({
+      where: { id: application.productVersionId, societyId: scope.societyId },
+    });
+    const rule = version?.publishedAt ? parseLoanRule(version.ruleBody) : null;
+    if (!rule) throw new ApiError(409, 'not_calculated', 'modules.error.notCalculated');
+    const lines = await tx.loanScheduleLine.findMany({
+      where: { societyId: scope.societyId, applicationId },
+      orderBy: { installmentNo: 'asc' },
+    });
+    if (lines.length === 0) throw new ApiError(409, 'not_calculated', 'modules.error.notCalculated');
+    let remaining = new Prisma.Decimal(0);
+    let unpaid = new Prisma.Decimal(0);
+    for (const line of lines) {
+      if (line.status !== 'due') continue;
+      remaining = remaining.plus(line.principal);
+      unpaid = unpaid.plus(line.fee);
+    }
+    const amount = settlementAmount({
+      remainingPrincipal: remaining.toString(),
+      annualRatePercent: rule.annualRatePercent,
+      days,
+      unpaidFee: unpaid.toString(),
+    });
+    await audit(tx, scope, 'loans.settlement_quoted', 'loan_application', applicationId, traceId);
+    return {
+      amount,
+      remainingPrincipal: remaining.toString(),
+      unpaidFee: unpaid.toString(),
+      annualRatePercent: rule.annualRatePercent,
+      days,
+    };
+  });
+}
+
+async function ensureNotice(
+  tx: Prisma.TransactionClient,
+  scope: Scope,
+  request: { id: string; memberId: string },
+  messageKey: string,
+): Promise<number> {
+  const existing = await tx.notificationDelivery.findFirst({
+    where: {
+      societyId: scope.societyId,
+      objectType: 'emergency_request',
+      objectId: request.id,
+      messageKey,
+      channel: 'in_app',
+    },
+  });
+  if (existing) return 0;
+  await tx.notificationDelivery.create({
+    data: {
+      societyId: scope.societyId,
+      memberId: request.memberId,
+      channel: 'in_app',
+      status: 'delivered',
+      messageKey,
+      objectType: 'emergency_request',
+      objectId: request.id,
+      createdBy: scope.userId,
+    },
+  });
+  return 1;
+}
+
+export async function sweepEmergencyDeadlines(now: Date) {
+  const societies = await prisma.society.findMany({ select: { id: true } });
+  let acknowledged = 0;
+  let escalated = 0;
+  for (const society of societies) {
+    const requests = await prisma.emergencyRequest.findMany({
+      where: { societyId: society.id, status: { not: 'closed' } },
+    });
+    for (const request of requests) {
+      const scope = { societyId: society.id, userId: request.createdBy };
+      const age = now.getTime() - request.createdAt.getTime();
+      const created = await withSociety(scope, async (tx) => {
+        const updates = await tx.emergencyUpdate.count({ where: { societyId: scope.societyId, requestId: request.id } });
+        const ack = age >= ACK_MS && updates === 0 ? await ensureNotice(tx, scope, request, 'modules.emergency.acknowledgeDue') : 0;
+        const esc = age >= ESCALATE_MS ? await ensureNotice(tx, scope, request, 'modules.emergency.escalateDue') : 0;
+        return { ack, esc };
+      });
+      acknowledged += created.ack;
+      escalated += created.esc;
+    }
+  }
+  return { acknowledged, escalated };
 }

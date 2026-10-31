@@ -9,18 +9,50 @@ import { ApiError, zodFields } from './errors';
 import { log } from './logger';
 import { prisma } from './db';
 import { attachActor, requireAuth } from './middleware/auth';
-import { getMe, postLanguage, postLogin, postLogout, postRefresh, postSwitchSociety } from './modules/auth/auth.routes';
+import {
+  getMe,
+  postLanguage,
+  postLogin,
+  postLogout,
+  postMfaConfirm,
+  postMfaEnroll,
+  postRefresh,
+  postSwitchSociety,
+} from './modules/auth/auth.routes';
 import { getChanges, getConfig, getConsent, postApprove, putConfig } from './modules/config/config.routes';
 import { getAudit, getUsers } from './modules/directory/directory.routes';
 import {
+  getAssets,
+  getBudget,
+  getFundLedger,
+  getFunds,
+  getMemberLedger,
+  getReconciliation,
+  getStatements,
+  getBanks,
+  getStatementLines,
+  postAsset,
+  postBank,
+  postBudget,
+  postFund,
+  postDispose,
+  postInvestment,
+  postMatch,
+  postStatementImport,
+  postStatement,
+} from './modules/finance/finance.routes';
+import {
   getAccounts,
+  getClaim,
   getClaims,
   getCommittees,
   getEmergency,
   getFamily,
   getGoals,
+  getTrialBalance,
   getJournals,
   getLoans,
+  getLoanApplications,
   getLookups,
   getMemberClaims,
   getMemberEmergency,
@@ -30,15 +62,30 @@ import {
   getMemberProfile,
   getMemberProjects,
   getMembers,
+  getMyChannel,
   getMyMember,
   getProjects,
+  getApprovalRequests,
+  getPeriods,
+  getRecord,
   getRoutes,
+  getTemplates,
   getSchemes,
   getSuggestions,
   postAccount,
   postApprovalRequest,
+  postChart,
+  postClosePeriod,
   postClaim,
+  postAppointment,
   postCommittee,
+  putCommittee,
+  putRecord,
+  putTemplate,
+  postGovernanceDocument,
+  postMeeting,
+  postMemberImport,
+  postResolution,
   postDecision,
   postEmergency,
   postEmergencyUpdate,
@@ -53,13 +100,18 @@ import {
   postKpi,
   postLoan,
   postLoanApplication,
+  postLoanSchedule,
+  postSettlement,
   postLoanVersion,
+  postPayClaim,
   postLookup,
   postMember,
   postMemberFamily,
   postMemberStatus,
   postPeriod,
   postProject,
+  postProjectExpense,
+  postProjectParticipant,
   postRoute,
   postScheme,
   postSchemeVersion,
@@ -67,6 +119,7 @@ import {
   postSuggestion,
   postSuggestionDecision,
   postTemplate,
+  postVerification,
 } from './modules/operations/operations.routes';
 
 export function createApp() {
@@ -124,6 +177,8 @@ export function createApp() {
   app.post('/api/v1/auth/logout', requireAuth, postLogout);
   app.get('/api/v1/me', requireAuth, getMe);
   app.post('/api/v1/me/language', requireAuth, postLanguage);
+  app.post('/api/v1/me/mfa/enroll', requireAuth, postMfaEnroll);
+  app.post('/api/v1/me/mfa/confirm', requireAuth, postMfaConfirm);
   app.post('/api/v1/session/society', requireAuth, postSwitchSociety);
   app.get('/api/v1/config', requireAuth, getConfig);
   app.put('/api/v1/config/:key', requireAuth, putConfig);
@@ -136,7 +191,9 @@ export function createApp() {
   app.post('/api/v1/lookups', requireAuth, safe(postLookup));
   app.get('/api/v1/members', requireAuth, safe(getMembers));
   app.post('/api/v1/members', requireAuth, safe(postMember));
+  app.post('/api/v1/members/import', requireAuth, safe(postMemberImport));
   app.get('/api/v1/members/me', requireAuth, safe(getMyMember));
+  app.get('/api/v1/me/home', requireAuth, safe(getMyChannel));
   app.get('/api/v1/members/:id', requireAuth, safe(getMemberProfile));
   app.get('/api/v1/members/:id/history', requireAuth, safe(getMemberHistory));
   app.post('/api/v1/members/:id/status', requireAuth, safe(postMemberStatus));
@@ -151,30 +208,67 @@ export function createApp() {
   app.post('/api/v1/family-links', requireAuth, safe(postFamilyLink));
   app.get('/api/v1/committees', requireAuth, safe(getCommittees));
   app.post('/api/v1/committees', requireAuth, safe(postCommittee));
+  app.put('/api/v1/committees/:id', requireAuth, safe(putCommittee));
+  app.get('/api/v1/records/:kind/:id', requireAuth, safe(getRecord));
+  app.put('/api/v1/records/:kind/:id', requireAuth, safe(putRecord));
+  app.post('/api/v1/committees/:id/appointments', requireAuth, safe(postAppointment));
+  app.post('/api/v1/committees/:id/meetings', requireAuth, safe(postMeeting));
+  app.post('/api/v1/meetings/:id/resolutions', requireAuth, safe(postResolution));
+  app.post('/api/v1/governance-documents', requireAuth, safe(postGovernanceDocument));
   app.get('/api/v1/welfare-schemes', requireAuth, safe(getSchemes));
   app.post('/api/v1/welfare-schemes', requireAuth, safe(postScheme));
   app.post('/api/v1/welfare-schemes/:id/versions', requireAuth, safe(postSchemeVersion));
   app.get('/api/v1/claims', requireAuth, safe(getClaims));
+  app.get('/api/v1/claims/:id', requireAuth, safe(getClaim));
   app.post('/api/v1/claims', requireAuth, safe(postClaim));
+  app.post('/api/v1/claims/:id/pay', requireAuth, safe(postPayClaim));
   app.get('/api/v1/approval-routes', requireAuth, safe(getRoutes));
+  app.get('/api/v1/approval-requests', requireAuth, safe(getApprovalRequests));
   app.post('/api/v1/approval-routes', requireAuth, safe(postRoute));
   app.post('/api/v1/approval-routes/:id/stages', requireAuth, safe(postStage));
   app.post('/api/v1/approval-requests', requireAuth, safe(postApprovalRequest));
   app.post('/api/v1/approval-requests/:id/decisions', requireAuth, safe(postDecision));
   app.get('/api/v1/accounts', requireAuth, safe(getAccounts));
   app.post('/api/v1/accounts', requireAuth, safe(postAccount));
+  app.post('/api/v1/ledger/chart', requireAuth, safe(postChart));
+  app.get('/api/v1/reports/trial-balance', requireAuth, safe(getTrialBalance));
+  app.get('/api/v1/reports/statements', requireAuth, safe(getStatements));
+  app.get('/api/v1/funds', requireAuth, safe(getFunds));
+  app.post('/api/v1/funds', requireAuth, safe(postFund));
+  app.get('/api/v1/funds/:id/ledger', requireAuth, safe(getFundLedger));
+  app.get('/api/v1/members/:id/ledger', requireAuth, safe(getMemberLedger));
+  app.get('/api/v1/bank-accounts', requireAuth, safe(getBanks));
+  app.post('/api/v1/bank-accounts', requireAuth, safe(postBank));
+  app.post('/api/v1/bank-statement-lines', requireAuth, safe(postStatement));
+  app.get('/api/v1/bank-statement-lines', requireAuth, safe(getStatementLines));
+  app.post('/api/v1/bank-accounts/:id/statement-import', requireAuth, safe(postStatementImport));
+  app.post('/api/v1/bank-statement-lines/:id/match', requireAuth, safe(postMatch));
+  app.get('/api/v1/bank-accounts/:id/reconciliation', requireAuth, safe(getReconciliation));
+  app.post('/api/v1/budgets', requireAuth, safe(postBudget));
+  app.get('/api/v1/budgets/:id', requireAuth, safe(getBudget));
+  app.get('/api/v1/assets', requireAuth, safe(getAssets));
+  app.post('/api/v1/assets', requireAuth, safe(postAsset));
+  app.post('/api/v1/assets/:id/dispose', requireAuth, safe(postDispose));
+  app.post('/api/v1/investments', requireAuth, safe(postInvestment));
+  app.get('/api/v1/fiscal-periods', requireAuth, safe(getPeriods));
   app.post('/api/v1/fiscal-periods', requireAuth, safe(postPeriod));
+  app.post('/api/v1/fiscal-periods/:id/close', requireAuth, safe(postClosePeriod));
   app.get('/api/v1/journal-documents', requireAuth, safe(getJournals));
   app.post('/api/v1/journal-documents', requireAuth, safe(postJournalDocument));
   app.post('/api/v1/journal-documents/:id/lines', requireAuth, safe(postJournalLine));
   app.post('/api/v1/journal-documents/:id/post', requireAuth, safe(postJournalPost));
   app.post('/api/v1/journal-documents/:id/reverse', requireAuth, safe(postJournalReverse));
   app.get('/api/v1/loan-products', requireAuth, safe(getLoans));
+  app.get('/api/v1/loan-applications', requireAuth, safe(getLoanApplications));
   app.post('/api/v1/loan-products', requireAuth, safe(postLoan));
   app.post('/api/v1/loan-products/:id/versions', requireAuth, safe(postLoanVersion));
   app.post('/api/v1/loan-applications', requireAuth, safe(postLoanApplication));
+  app.post('/api/v1/loan-applications/:id/schedule', requireAuth, safe(postLoanSchedule));
+  app.post('/api/v1/loan-applications/:id/settlement', requireAuth, safe(postSettlement));
   app.get('/api/v1/projects', requireAuth, safe(getProjects));
   app.post('/api/v1/projects', requireAuth, safe(postProject));
+  app.post('/api/v1/projects/:id/participants', requireAuth, safe(postProjectParticipant));
+  app.post('/api/v1/projects/:id/expenses', requireAuth, safe(postProjectExpense));
   app.get('/api/v1/suggestions', requireAuth, safe(getSuggestions));
   app.post('/api/v1/suggestions', requireAuth, safe(postSuggestion));
   app.post('/api/v1/suggestions/:id/decision', requireAuth, safe(postSuggestionDecision));
@@ -185,7 +279,10 @@ export function createApp() {
   app.post('/api/v1/esg-goals', requireAuth, safe(postGoal));
   app.post('/api/v1/esg-goals/:id/kpis', requireAuth, safe(postKpi));
   app.post('/api/v1/esg/results', requireAuth, safe(postEsgResult));
+  app.post('/api/v1/verifications', requireAuth, safe(postVerification));
+  app.get('/api/v1/notification-templates', requireAuth, safe(getTemplates));
   app.post('/api/v1/notification-templates', requireAuth, safe(postTemplate));
+  app.put('/api/v1/notification-templates/:id', requireAuth, safe(putTemplate));
 
   app.use((error: unknown, req: Request, res: Response, _next: NextFunction) => {
     if (error instanceof ZodError) {
