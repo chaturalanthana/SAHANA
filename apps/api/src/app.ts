@@ -79,6 +79,8 @@ import {
   postMemberStatus,
   postPeriod,
   postProject,
+  postProjectExpense,
+  postProjectParticipant,
   postRoute,
   postScheme,
   postSchemeVersion,
@@ -206,6 +208,8 @@ export function createApp() {
   app.post('/api/v1/loan-applications/:id/schedule', requireAuth, safe(postLoanSchedule));
   app.get('/api/v1/projects', requireAuth, safe(getProjects));
   app.post('/api/v1/projects', requireAuth, safe(postProject));
+  app.post('/api/v1/projects/:id/participants', requireAuth, safe(postProjectParticipant));
+  app.post('/api/v1/projects/:id/expenses', requireAuth, safe(postProjectExpense));
   app.get('/api/v1/suggestions', requireAuth, safe(getSuggestions));
   app.post('/api/v1/suggestions', requireAuth, safe(postSuggestion));
   app.post('/api/v1/suggestions/:id/decision', requireAuth, safe(postSuggestionDecision));

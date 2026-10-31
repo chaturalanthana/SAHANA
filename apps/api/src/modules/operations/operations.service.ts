@@ -870,6 +870,78 @@ export async function payClaim(
   });
 }
 
+export async function addProjectParticipant(
+  scope: Scope,
+  projectId: string,
+  input: { memberId: string; familyMemberId?: string },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const project = await tx.project.findFirst({ where: { id: projectId, societyId: scope.societyId } });
+    const member = await tx.member.findFirst({ where: { id: input.memberId, societyId: scope.societyId } });
+    if (!project || !member) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const created = await tx.projectParticipant.create({
+      data: { societyId: scope.societyId, projectId, memberId: input.memberId, familyMemberId: input.familyMemberId },
+    });
+    await audit(tx, scope, 'projects.participant_added', 'project_participant', created.id, traceId);
+    return row(created);
+  });
+}
+
+export async function addProjectExpense(
+  scope: Scope,
+  projectId: string,
+  input: { description: string; amount: string; periodId?: string; expenseAccountId?: string; cashAccountId?: string },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const project = await tx.project.findFirst({ where: { id: projectId, societyId: scope.societyId } });
+    if (!project) throw new ApiError(404, 'not_found', 'errors.notFound');
+    let journalDocumentId: string | null = null;
+    if (input.periodId && input.expenseAccountId && input.cashAccountId) {
+      const document = await tx.journalDocument.create({
+        data: {
+          societyId: scope.societyId,
+          periodId: input.periodId,
+          reason: input.description,
+          createdBy: scope.userId,
+        },
+      });
+      await tx.journalLine.create({
+        data: {
+          societyId: scope.societyId,
+          documentId: document.id,
+          accountId: input.expenseAccountId,
+          debit: new Prisma.Decimal(input.amount),
+          credit: new Prisma.Decimal(0),
+        },
+      });
+      await tx.journalLine.create({
+        data: {
+          societyId: scope.societyId,
+          documentId: document.id,
+          accountId: input.cashAccountId,
+          debit: new Prisma.Decimal(0),
+          credit: new Prisma.Decimal(input.amount),
+        },
+      });
+      await tx.$executeRaw`SELECT app_post_journal(${document.id}::uuid, ${scope.societyId}::uuid, ${scope.userId}::uuid)`;
+      journalDocumentId = document.id;
+    }
+    const created = await tx.projectExpense.create({
+      data: {
+        societyId: scope.societyId,
+        projectId,
+        description: input.description,
+        amount: new Prisma.Decimal(input.amount),
+        journalDocumentId,
+      },
+    });
+    await audit(tx, scope, 'projects.expense_recorded', 'project_expense', created.id, traceId);
+    return row(created);
+  });
+}
+
 export async function createSuggestion(
   scope: Scope,
   input: { memberId: string; body: string },
@@ -898,9 +970,21 @@ export async function decideSuggestion(
   return withSociety(scope, async (tx) => {
     const existing = await tx.suggestion.findFirst({ where: { id: suggestionId, societyId: scope.societyId } });
     if (!existing) throw new ApiError(404, 'not_found', 'errors.notFound');
+    let projectId = input.projectId;
+    if (input.status === 'accepted' && !projectId) {
+      const project = await tx.project.create({
+        data: {
+          societyId: scope.societyId,
+          name: existing.body.slice(0, 80),
+          category: 'suggestion',
+          createdBy: scope.userId,
+        },
+      });
+      projectId = project.id;
+    }
     const updated = await tx.suggestion.update({
       where: { id: suggestionId },
-      data: { status: input.status, projectId: input.projectId },
+      data: { status: input.status, projectId },
     });
     await tx.suggestionEvent.create({
       data: {

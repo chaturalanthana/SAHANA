@@ -5,6 +5,8 @@ import { ApiError } from '../../errors';
 import type { Scope } from '../../db';
 import {
   addJournalLine,
+  addProjectExpense,
+  addProjectParticipant,
   addMemberFamily,
   changeMemberStatus,
   createAccount,
@@ -447,6 +449,29 @@ export function getProjects(req: Request, res: Response, next: NextFunction): vo
 export function postProject(req: Request, res: Response, next: NextFunction): void {
   const body = z.object({ name: text, category: text }).parse(req.body);
   void send(res, next, () => createNamed(allow(req, 'projects.write'), 'project', body, req.traceId), 201);
+}
+
+export function postProjectParticipant(req: Request, res: Response, next: NextFunction): void {
+  const body = z.object({ memberId: z.string().uuid(), familyMemberId: z.string().uuid().optional() }).parse(req.body);
+  void send(res, next, () => addProjectParticipant(allow(req, 'projects.write'), String(req.params.id), body, req.traceId), 201);
+}
+
+export function postProjectExpense(req: Request, res: Response, next: NextFunction): void {
+  const body = z
+    .object({
+      description: longText,
+      amount: money,
+      periodId: z.string().uuid().optional(),
+      expenseAccountId: z.string().uuid().optional(),
+      cashAccountId: z.string().uuid().optional(),
+    })
+    .parse(req.body);
+  const scope = allow(req, 'projects.write');
+  if (body.periodId && !actor(req).permissions.includes('ledger.post')) {
+    next(new ApiError(403, 'forbidden', 'errors.forbidden'));
+    return;
+  }
+  void send(res, next, () => addProjectExpense(scope, String(req.params.id), body, req.traceId), 201);
 }
 
 export function getSuggestions(req: Request, res: Response, next: NextFunction): void {
