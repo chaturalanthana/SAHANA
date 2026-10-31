@@ -128,6 +128,8 @@ export const si = {
       projects: 'ව්‍යාපෘති',
       emergency: 'හදිසි ආධාර',
       esg: 'ESG',
+      approvals: 'අනුමැතිය',
+      notifications: 'දැනුම්දීම්',
     },
     field: {
       memberNo: 'සාමාජික අංකය',
@@ -178,6 +180,15 @@ export const si = {
     esg: {
       title: 'ESG',
       hint: 'ඉලක්ක ගබඩා කළ හැක. සත්‍යාපිත ප්‍රතිඵලයක් ගණන් කරන්නේ පරීක්ෂා කළ මූලාශ්‍ර පමණි.',
+    },
+    screen: {
+      detail: 'විස්තර',
+      edit: 'සංස්කරණය',
+    },
+    action: {
+      closePeriod: 'කාල සීමාව වසන්න',
+      dispose: 'වත්කම බැහැර කරන්න',
+      importStatement: 'ප්‍රකාශය ආයාත කරන්න',
     },
     finance: {
       statements: 'මූල්‍ය ප්‍රකාශ',

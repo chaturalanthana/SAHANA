@@ -11,11 +11,13 @@ const destinations = [
   ['/members', 'modules.nav.members', 'members.read'],
   ['/governance', 'modules.nav.governance', 'governance.read'],
   ['/welfare', 'modules.nav.welfare', 'welfare.read'],
+  ['/approvals', 'modules.nav.approvals', 'approvals.read'],
   ['/ledger', 'modules.nav.ledger', 'ledger.read'],
   ['/loans', 'modules.nav.loans', 'loans.read'],
   ['/projects', 'modules.nav.projects', 'projects.read'],
   ['/emergency', 'modules.nav.emergency', 'emergency.read'],
   ['/esg', 'modules.nav.esg', 'esg.read'],
+  ['/notifications', 'modules.nav.notifications', 'notifications.read'],
 ] as const;
 
 export function Shell({ children }: { children: ReactNode }) {

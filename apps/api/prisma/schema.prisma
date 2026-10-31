@@ -578,8 +578,9 @@ model FixedAsset {
   name             String
   cost             Decimal  @db.Decimal(19, 4)
   acquiredOn       DateTime @map("acquired_on") @db.Date
-  usefulLifeYears  Int?     @map("useful_life_years")
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  usefulLifeYears  Int?      @map("useful_life_years")
+  disposedAt       DateTime? @map("disposed_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   createdBy        String   @map("created_by") @db.Uuid
 
   @@index([societyId])

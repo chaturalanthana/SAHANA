@@ -15,7 +15,11 @@ import {
   createApprovalRoute,
   createApprovalStage,
   createClaim,
+  findRecord,
   listClaimEvents,
+  recordPermission,
+  updateCommitteeName,
+  updateTemplateBody,
   createAppointment,
   createEmergency,
   createGovernanceDocument,
@@ -35,6 +39,7 @@ import {
   createLookup,
   createMember,
   createNamed,
+  closePeriod,
   createPeriod,
   createSchemeVersion,
   createSuggestion,
@@ -362,6 +367,10 @@ export function postAccount(req: Request, res: Response, next: NextFunction): vo
   void send(res, next, () => createAccount(allow(req, 'ledger.post'), body, req.traceId), 201);
 }
 
+export function postClosePeriod(req: Request, res: Response, next: NextFunction): void {
+  void send(res, next, () => closePeriod(allow(req, 'ledger.post'), String(req.params.id), req.traceId));
+}
+
 export function postPeriod(req: Request, res: Response, next: NextFunction): void {
   const body = z.object({ name: text, startsOn: z.string().date(), endsOn: z.string().date() }).parse(req.body);
   void send(res, next, () => createPeriod(allow(req, 'ledger.post'), body, req.traceId), 201);
@@ -622,6 +631,51 @@ export function postEsgResult(req: Request, res: Response, next: NextFunction): 
 export function postVerification(req: Request, res: Response, next: NextFunction): void {
   const body = z.object({ objectType: text, objectId: z.string().uuid() }).parse(req.body);
   void send(res, next, () => verifySource(allow(req, 'esg.write'), body, req.traceId), 201);
+}
+
+export function getTemplates(req: Request, res: Response, next: NextFunction): void {
+  const page = pageOf(req);
+  void send(res, next, () =>
+    listWhere(allow(req, 'notifications.read'), page.page, page.pageSize, (tx, where) =>
+      Promise.all([
+        tx.notificationTemplate.count({ where }),
+        tx.notificationTemplate.findMany({ where, take: page.pageSize, skip: (page.page - 1) * page.pageSize }),
+      ]),
+    ),
+  );
+}
+
+export function putTemplate(req: Request, res: Response, next: NextFunction): void {
+  const body = z.object({ body: longText }).parse(req.body);
+  void send(res, next, () => updateTemplateBody(allow(req, 'notifications.write'), String(req.params.id), body.body, req.traceId));
+}
+
+export function putCommittee(req: Request, res: Response, next: NextFunction): void {
+  const body = z.object({ name: text }).parse(req.body);
+  void send(res, next, () => updateCommitteeName(allow(req, 'governance.write'), String(req.params.id), body.name, req.traceId));
+}
+
+export function getRecord(req: Request, res: Response, next: NextFunction): void {
+  const permission = recordPermission(String(req.params.kind));
+  if (!permission) {
+    next(new ApiError(404, 'not_found', 'errors.notFound'));
+    return;
+  }
+  void send(res, next, () =>
+    findRecord(allow(req, permission), String(req.params.kind) as Parameters<typeof findRecord>[1], String(req.params.id)),
+  );
+}
+
+export function getApprovalRequests(req: Request, res: Response, next: NextFunction): void {
+  const page = pageOf(req);
+  void send(res, next, () =>
+    listWhere(allow(req, 'approvals.read'), page.page, page.pageSize, (tx, where) =>
+      Promise.all([
+        tx.approvalRequest.count({ where }),
+        tx.approvalRequest.findMany({ where, take: page.pageSize, skip: (page.page - 1) * page.pageSize }),
+      ]),
+    ),
+  );
 }
 
 export function postTemplate(req: Request, res: Response, next: NextFunction): void {

@@ -6,6 +6,18 @@ import { Shell } from './shell/Shell';
 import { ConfigPage } from './pages/ConfigPage';
 import { MemberPage } from './pages/MemberPage';
 import { FinancePage } from './pages/FinancePage';
+import {
+  ApprovalsPage,
+  ClaimsPage,
+  EmergencyPage,
+  EsgPage,
+  GovernancePage,
+  LoansPage,
+  NotificationsPage,
+  ProjectsPage,
+  SuggestionsPage,
+  WelfareSchemesPage,
+} from './pages/ModuleScreen';
 import { WorkspacePage } from './pages/WorkspacePage';
 import { LoginPage } from './pages/LoginPage';
 import { useI18n } from './i18n';
@@ -45,13 +57,27 @@ function Protected() {
         <Route path="/config" element={<ConfigPage />} />
         <Route path="/members" element={<WorkspacePage sectionKey="members" />} />
         <Route path="/members/:id" element={<MemberPage />} />
-        <Route path="/governance" element={<WorkspacePage sectionKey="governance" />} />
-        <Route path="/welfare" element={<WorkspacePage sectionKey="welfare" />} />
+        <Route path="/governance" element={<GovernancePage />} />
+        <Route path="/governance/:id" element={<GovernancePage />} />
+        <Route path="/welfare/claims" element={<ClaimsPage />} />
+        <Route path="/welfare/claims/:id" element={<ClaimsPage />} />
+        <Route path="/welfare" element={<WelfareSchemesPage />} />
+        <Route path="/welfare/:id" element={<WelfareSchemesPage />} />
+        <Route path="/approvals" element={<ApprovalsPage />} />
+        <Route path="/approvals/:id" element={<ApprovalsPage />} />
         <Route path="/ledger" element={<FinancePage />} />
-        <Route path="/loans" element={<WorkspacePage sectionKey="loans" />} />
-        <Route path="/projects" element={<WorkspacePage sectionKey="projects" />} />
-        <Route path="/emergency" element={<WorkspacePage sectionKey="emergency" />} />
-        <Route path="/esg" element={<WorkspacePage sectionKey="esg" />} />
+        <Route path="/loans" element={<LoansPage />} />
+        <Route path="/loans/:id" element={<LoansPage />} />
+        <Route path="/projects" element={<ProjectsPage />} />
+        <Route path="/projects/:id" element={<ProjectsPage />} />
+        <Route path="/suggestions" element={<SuggestionsPage />} />
+        <Route path="/suggestions/:id" element={<SuggestionsPage />} />
+        <Route path="/emergency" element={<EmergencyPage />} />
+        <Route path="/emergency/:id" element={<EmergencyPage />} />
+        <Route path="/esg" element={<EsgPage />} />
+        <Route path="/esg/:id" element={<EsgPage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/notifications/:id" element={<NotificationsPage />} />
         <Route path="*" element={<Navigate to="/config" replace />} />
       </Routes>
     </Shell>

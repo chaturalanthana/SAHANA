@@ -128,6 +128,8 @@ export const ta = {
       projects: 'திட்டங்கள்',
       emergency: 'அவசர உதவி',
       esg: 'ESG',
+      approvals: 'அனுமதிகள்',
+      notifications: 'அறிவிப்புகள்',
     },
     field: {
       memberNo: 'உறுப்பினர் எண்',
@@ -178,6 +180,15 @@ export const ta = {
     esg: {
       title: 'ESG',
       hint: 'இலக்குகளை சேமிக்கலாம். சரிபார்க்கப்பட்ட முடிவு சரிபார்த்த மூலங்களை மட்டும் எண்ணும்.',
+    },
+    screen: {
+      detail: 'விவரம்',
+      edit: 'திருத்து',
+    },
+    action: {
+      closePeriod: 'காலத்தை மூடு',
+      dispose: 'சொத்தை அகற்று',
+      importStatement: 'அறிக்கையை இறக்குமதி செய்',
     },
     finance: {
       statements: 'நிதி அறிக்கைகள்',

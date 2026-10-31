@@ -41,9 +41,31 @@ export function buildStatements(items: StatementAccount[]) {
   };
 }
 
+export function carryingAmount(cost: string, usefulLifeYears: number | null, acquiredOn: Date, asOf: Date): string {
+  if (!usefulLifeYears || usefulLifeYears < 1) return fromMinor(toMinor(cost));
+  const elapsed = Math.max(0, asOf.getUTCFullYear() - acquiredOn.getUTCFullYear());
+  const years = Math.min(usefulLifeYears, elapsed);
+  const accumulated = (toMinor(cost) / BigInt(usefulLifeYears)) * BigInt(years);
+  const carrying = toMinor(cost) - accumulated;
+  return fromMinor(carrying < 0n ? 0n : carrying);
+}
+
 export function annualDepreciation(cost: string, usefulLifeYears: number | null): string | null {
   if (!usefulLifeYears || usefulLifeYears < 1) return null;
   return fromMinor(toMinor(cost) / BigInt(usefulLifeYears));
+}
+
+export function parseStatementCsv(input: string): { bookedOn: string; amount: string; description: string }[] {
+  const lines = input.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.length > 0);
+  const header = lines[0]?.toLowerCase();
+  if (header !== 'bookedon,amount,description') {
+    throw new Error('validation');
+  }
+  return lines.slice(1).map((line) => {
+    const match = /^(\d{4}-\d{2}-\d{2}),(-?\d+(?:\.\d{1,4})?),(.*)$/.exec(line);
+    if (!match || !match[3] || match[3].length > 200) throw new Error('validation');
+    return { bookedOn: match[1]!, amount: match[2]!, description: match[3] };
+  });
 }
 
 export function budgetVariance(budget: string, actual: string): string {

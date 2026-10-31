@@ -117,8 +117,162 @@ async function main(): Promise<void> {
   await seedSocietyConfig(societyA, 'Demo Society A', adminA);
   await seedSocietyConfig(societyB, 'Demo Society B', adminB);
   await seedPlatformConfig(adminA);
+  await seedWalkthrough(societyA, adminA);
 
   console.log('Demo seed completed. Passwords were not printed.');
+}
+
+async function seedWalkthrough(societyId: string, actorId: string): Promise<void> {
+  const existing = await prisma.member.findFirst({ where: { societyId, memberNo: 'DEMO-001' } });
+  if (existing) return;
+  const chart = [
+    ['1000', 'Cash', 'asset', true],
+    ['1100', 'Bank', 'asset', true],
+    ['4000', 'Contribution income', 'income', false],
+    ['5000', 'Welfare expense', 'expense', false],
+  ] as const;
+  const accounts: Record<string, string> = {};
+  for (const [code, name, accountType, isCash] of chart) {
+    const account = await prisma.account.create({
+      data: { societyId, code, name, accountType, isCash, createdBy: actorId },
+    });
+    accounts[code] = account.id;
+  }
+  const member = await prisma.member.create({
+    data: {
+      societyId,
+      userId: actorId,
+      memberNo: 'DEMO-001',
+      givenName: 'Nimal',
+      familyName: 'Perera',
+      statusCode: 'active',
+      categoryCode: 'employee',
+      createdBy: actorId,
+      updatedBy: actorId,
+    },
+  });
+  await prisma.memberStatusHistory.create({
+    data: { societyId, memberId: member.id, statusCode: 'applied', reason: 'Application', createdBy: actorId },
+  });
+  await prisma.memberStatusHistory.create({
+    data: { societyId, memberId: member.id, statusCode: 'active', reason: 'Joined', createdBy: actorId },
+  });
+  const person = await prisma.familyMember.create({
+    data: { societyId, givenName: 'Kamala', familyName: 'Perera', createdBy: actorId },
+  });
+  await prisma.memberFamilyLink.create({
+    data: { societyId, memberId: member.id, familyMemberId: person.id, relationshipCode: 'spouse', createdBy: actorId },
+  });
+  const period = await prisma.fiscalPeriod.create({
+    data: {
+      societyId,
+      name: '2026',
+      startsOn: new Date('2026-01-01'),
+      endsOn: new Date('2026-12-31'),
+      createdBy: actorId,
+    },
+  });
+  const fund = await prisma.fund.create({ data: { societyId, name: 'Welfare fund', createdBy: actorId } });
+  const journal = await prisma.journalDocument.create({
+    data: { societyId, periodId: period.id, status: 'posted', reason: 'Opening contribution', createdBy: actorId, postedAt: new Date(), postedBy: actorId },
+  });
+  await prisma.journalLine.create({
+    data: { societyId, documentId: journal.id, accountId: accounts['1000']!, fundId: fund.id, memberId: member.id, debit: '25.0000', credit: '0' },
+  });
+  await prisma.journalLine.create({
+    data: { societyId, documentId: journal.id, accountId: accounts['4000']!, fundId: fund.id, debit: '0', credit: '25.0000' },
+  });
+  const committee = await prisma.committee.create({ data: { societyId, name: 'Welfare committee', createdBy: actorId } });
+  const meeting = await prisma.meeting.create({
+    data: { societyId, committeeId: committee.id, title: 'October meeting', heldOn: new Date('2026-10-31'), createdBy: actorId },
+  });
+  await prisma.resolution.create({ data: { societyId, meetingId: meeting.id, title: 'Note the register', createdBy: actorId } });
+  await prisma.committeeAppointment.create({
+    data: { societyId, committeeId: committee.id, memberId: member.id, roleTitle: 'Secretary', startsOn: new Date('2026-01-01'), createdBy: actorId },
+  });
+  const scheme = await prisma.welfareScheme.create({ data: { societyId, name: 'Medical assistance', createdBy: actorId } });
+  const version = await prisma.welfareSchemeVersion.create({
+    data: {
+      societyId,
+      schemeId: scheme.id,
+      versionNo: 1,
+      publishedAt: new Date(),
+      ruleBody: {
+        waitingDays: 0,
+        maxAmount: null,
+        coveredRelationships: ['spouse', 'child'],
+        memberStatuses: ['active'],
+        frequency: 'once',
+        requiredDocuments: [],
+        contributionRequired: false,
+      },
+      createdBy: actorId,
+    },
+  });
+  await prisma.claim.create({
+    data: {
+      societyId,
+      memberId: member.id,
+      schemeVersionId: version.id,
+      idempotencyKey: 'demo-claim',
+      eligibilityStatus: 'eligible',
+      eligibilityReason: 'rule',
+      status: 'submitted',
+      createdBy: actorId,
+    },
+  });
+  const product = await prisma.loanProduct.create({ data: { societyId, name: 'Staff loan', createdBy: actorId } });
+  const loanVersion = await prisma.loanProductVersion.create({
+    data: {
+      societyId,
+      productId: product.id,
+      versionNo: 1,
+      publishedAt: new Date(),
+      ruleBody: { annualRatePercent: '0.0000', termMonths: 12, flatFee: '0.0000' },
+      createdBy: actorId,
+    },
+  });
+  await prisma.loanApplication.create({
+    data: { societyId, memberId: member.id, productVersionId: loanVersion.id, createdBy: actorId },
+  });
+  const project = await prisma.project.create({
+    data: { societyId, name: 'Tree planting', category: 'suggestion', createdBy: actorId },
+  });
+  await prisma.projectParticipant.create({ data: { societyId, projectId: project.id, memberId: member.id } });
+  await prisma.suggestion.create({
+    data: { societyId, memberId: member.id, body: 'Plant trees along the lane', status: 'accepted', projectId: project.id, createdBy: actorId },
+  });
+  await prisma.emergencyRequest.create({
+    data: {
+      societyId,
+      memberId: member.id,
+      requestType: 'medical',
+      phone: '0770000000',
+      description: '',
+      idempotencyKey: 'demo-emergency',
+      status: 'submitted',
+      createdBy: actorId,
+    },
+  });
+  await prisma.esgGoal.create({ data: { societyId, name: 'Member participation', createdBy: actorId } });
+  await prisma.notificationTemplate.create({
+    data: { societyId, code: 'claim.submitted', language: 'en', channel: 'in_app', body: 'Your claim was stored.', createdBy: actorId },
+  });
+  const bank = await prisma.bankAccount.create({
+    data: { societyId, name: 'Main bank', accountId: accounts['1000']!, createdBy: actorId },
+  });
+  await prisma.bankStatementLine.create({
+    data: { societyId, bankAccountId: bank.id, bookedOn: new Date('2026-02-01'), amount: '25.0000', description: 'Contribution', createdBy: actorId },
+  });
+  await prisma.budget.create({
+    data: { societyId, name: 'Welfare spend', accountId: accounts['5000']!, periodId: period.id, amount: '100.0000', createdBy: actorId },
+  });
+  await prisma.fixedAsset.create({
+    data: { societyId, name: 'Cupboard', cost: '80.0000', acquiredOn: new Date('2026-01-01'), createdBy: actorId },
+  });
+  await prisma.approvalRoute.create({
+    data: { societyId, name: 'Claim approval', policyStatus: 'in_force', allowSelfApproval: false, createdBy: actorId },
+  });
 }
 
 async function upsertSociety(name: string): Promise<string> {

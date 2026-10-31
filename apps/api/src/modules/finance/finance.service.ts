@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { withSociety, type Scope } from '../../db';
-import { annualDepreciation, budgetVariance, buildStatements, type StatementAccount } from '../../domain/statements';
+import { annualDepreciation, budgetVariance, buildStatements, carryingAmount, parseStatementCsv, type StatementAccount } from '../../domain/statements';
 import { ApiError } from '../../errors';
 
 function minor(value: Prisma.Decimal | string): bigint {
@@ -329,6 +329,99 @@ export async function listAssets(scope: Scope, page: number, pageSize: number) {
         annualDepreciation: annualDepreciation(item.cost.toString(), item.usefulLifeYears),
       })),
     };
+  });
+}
+
+export async function importStatementCsv(scope: Scope, bankAccountId: string, csv: string, traceId: string) {
+  let rows: { bookedOn: string; amount: string; description: string }[];
+  try {
+    rows = parseStatementCsv(csv);
+  } catch {
+    throw new ApiError(400, 'validation', 'errors.validation');
+  }
+  if (rows.length === 0 || rows.length > 500) throw new ApiError(400, 'validation', 'errors.validation');
+  return withSociety(scope, async (tx) => {
+    const bank = await tx.bankAccount.findFirst({ where: { id: bankAccountId, societyId: scope.societyId } });
+    if (!bank) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const created = [];
+    for (const row of rows) {
+      const line = await tx.bankStatementLine.create({
+        data: {
+          societyId: scope.societyId,
+          bankAccountId,
+          bookedOn: new Date(row.bookedOn),
+          amount: new Prisma.Decimal(row.amount),
+          description: row.description,
+          createdBy: scope.userId,
+        },
+      });
+      created.push(line.id);
+    }
+    await tx.auditEvent.create({
+      data: {
+        societyId: scope.societyId,
+        actorId: scope.userId,
+        action: 'ledger.statement_imported',
+        objectType: 'bank_account',
+        objectId: bankAccountId,
+        traceId,
+        detail: { count: created.length },
+      },
+    });
+    return { created: created.length };
+  });
+}
+
+export async function disposeAsset(
+  scope: Scope,
+  assetId: string,
+  input: { periodId: string; cashAccountId: string; assetAccountId: string; gainAccountId: string; lossAccountId: string; proceeds: string; reason: string },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const asset = await tx.fixedAsset.findFirst({ where: { id: assetId, societyId: scope.societyId } });
+    if (!asset) throw new ApiError(404, 'not_found', 'errors.notFound');
+    if (asset.disposedAt) throw new ApiError(409, 'conflict', 'modules.error.immutable');
+    const period = await tx.fiscalPeriod.findFirst({ where: { id: input.periodId, societyId: scope.societyId } });
+    if (!period || period.status === 'closed') throw new ApiError(409, 'period_closed', 'modules.error.periodClosed');
+    const carrying = carryingAmount(asset.cost.toString(), asset.usefulLifeYears, asset.acquiredOn, new Date());
+    const proceeds = minor(input.proceeds);
+    const carryingMinor = minor(carrying);
+    const document = await tx.journalDocument.create({
+      data: { societyId: scope.societyId, periodId: input.periodId, reason: input.reason, createdBy: scope.userId },
+    });
+    const lines: { accountId: string; debit: bigint; credit: bigint }[] = [
+      { accountId: input.cashAccountId, debit: proceeds, credit: 0n },
+      { accountId: input.assetAccountId, debit: 0n, credit: carryingMinor },
+    ];
+    if (proceeds > carryingMinor) lines.push({ accountId: input.gainAccountId, debit: 0n, credit: proceeds - carryingMinor });
+    if (proceeds < carryingMinor) lines.push({ accountId: input.lossAccountId, debit: carryingMinor - proceeds, credit: 0n });
+    for (const line of lines) {
+      if (line.debit === 0n && line.credit === 0n) continue;
+      await tx.journalLine.create({
+        data: {
+          societyId: scope.societyId,
+          documentId: document.id,
+          accountId: line.accountId,
+          debit: textMoney(line.debit),
+          credit: textMoney(line.credit),
+        },
+      });
+    }
+    await tx.$executeRaw`SELECT app_post_journal(${document.id}::uuid, ${scope.societyId}::uuid, ${scope.userId}::uuid)`;
+    await tx.fixedAsset.update({ where: { id: assetId }, data: { disposedAt: new Date() } });
+    await tx.auditEvent.create({
+      data: {
+        societyId: scope.societyId,
+        actorId: scope.userId,
+        action: 'ledger.asset_disposed',
+        objectType: 'fixed_asset',
+        objectId: assetId,
+        traceId,
+        detail: { journalDocumentId: document.id },
+      },
+    });
+    return { id: assetId, journalDocumentId: document.id, carrying };
   });
 }
 

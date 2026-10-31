@@ -124,6 +124,79 @@ export async function createMember(
   });
 }
 
+const recordKinds = {
+  committee: 'governance.read',
+  welfareScheme: 'welfare.read',
+  claim: 'welfare.read',
+  approvalRoute: 'approvals.read',
+  approvalRequest: 'approvals.read',
+  loanProduct: 'loans.read',
+  loanApplication: 'loans.read',
+  project: 'projects.read',
+  suggestion: 'projects.read',
+  emergencyRequest: 'emergency.read',
+  esgGoal: 'esg.read',
+  notificationTemplate: 'notifications.read',
+} as const;
+
+export type RecordKind = keyof typeof recordKinds;
+
+export function recordPermission(kind: string): string | null {
+  return kind in recordKinds ? recordKinds[kind as RecordKind] : null;
+}
+
+export async function findRecord(scope: Scope, kind: RecordKind, id: string) {
+  return withSociety(scope, async (tx) => {
+    const where = { id, societyId: scope.societyId };
+    const found =
+      kind === 'committee'
+        ? await tx.committee.findFirst({ where })
+        : kind === 'welfareScheme'
+          ? await tx.welfareScheme.findFirst({ where })
+          : kind === 'claim'
+            ? await tx.claim.findFirst({ where })
+            : kind === 'approvalRoute'
+              ? await tx.approvalRoute.findFirst({ where })
+              : kind === 'approvalRequest'
+                ? await tx.approvalRequest.findFirst({ where })
+                : kind === 'loanProduct'
+                  ? await tx.loanProduct.findFirst({ where })
+                  : kind === 'loanApplication'
+                    ? await tx.loanApplication.findFirst({ where })
+                    : kind === 'project'
+                      ? await tx.project.findFirst({ where })
+                      : kind === 'suggestion'
+                        ? await tx.suggestion.findFirst({ where })
+                        : kind === 'emergencyRequest'
+                          ? await tx.emergencyRequest.findFirst({ where })
+                          : kind === 'esgGoal'
+                            ? await tx.esgGoal.findFirst({ where })
+                            : await tx.notificationTemplate.findFirst({ where });
+    if (!found) throw new ApiError(404, 'not_found', 'errors.notFound');
+    return row(found);
+  });
+}
+
+export async function updateCommitteeName(scope: Scope, id: string, name: string, traceId: string) {
+  return withSociety(scope, async (tx) => {
+    const existing = await tx.committee.findFirst({ where: { id, societyId: scope.societyId } });
+    if (!existing) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const updated = await tx.committee.update({ where: { id }, data: { name } });
+    await audit(tx, scope, 'governance.committee_renamed', 'committee', id, traceId);
+    return row(updated);
+  });
+}
+
+export async function updateTemplateBody(scope: Scope, id: string, body: string, traceId: string) {
+  return withSociety(scope, async (tx) => {
+    const existing = await tx.notificationTemplate.findFirst({ where: { id, societyId: scope.societyId } });
+    if (!existing) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const updated = await tx.notificationTemplate.update({ where: { id }, data: { body } });
+    await audit(tx, scope, 'notifications.template_updated', 'notification_template', id, traceId);
+    return row(updated);
+  });
+}
+
 export async function myChannel(scope: Scope) {
   return withSociety(scope, async (tx) => {
     const member = await tx.member.findFirst({ where: { societyId: scope.societyId, userId: scope.userId } });
@@ -637,6 +710,21 @@ export async function createPeriod(
     });
     await audit(tx, scope, 'ledger.period_created', 'fiscal_period', created.id, traceId);
     return row(created);
+  });
+}
+
+export async function closePeriod(scope: Scope, periodId: string, traceId: string) {
+  return withSociety(scope, async (tx) => {
+    const period = await tx.fiscalPeriod.findFirst({ where: { id: periodId, societyId: scope.societyId } });
+    if (!period) throw new ApiError(404, 'not_found', 'errors.notFound');
+    if (period.status === 'closed') throw new ApiError(409, 'period_closed', 'modules.error.periodClosed');
+    const drafts = await tx.journalDocument.count({
+      where: { societyId: scope.societyId, periodId, status: 'draft' },
+    });
+    if (drafts > 0) throw new ApiError(409, 'conflict', 'modules.error.unbalanced');
+    const updated = await tx.fiscalPeriod.update({ where: { id: periodId }, data: { status: 'closed' } });
+    await audit(tx, scope, 'ledger.period_closed', 'fiscal_period', periodId, traceId);
+    return row(updated);
   });
 }
 

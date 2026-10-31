@@ -33,8 +33,10 @@ import {
   postBank,
   postBudget,
   postFund,
+  postDispose,
   postInvestment,
   postMatch,
+  postStatementImport,
   postStatement,
 } from './modules/finance/finance.routes';
 import {
@@ -60,15 +62,21 @@ import {
   getMyChannel,
   getMyMember,
   getProjects,
+  getApprovalRequests,
+  getRecord,
   getRoutes,
+  getTemplates,
   getSchemes,
   getSuggestions,
   postAccount,
   postApprovalRequest,
   postChart,
+  postClosePeriod,
   postClaim,
   postAppointment,
   postCommittee,
+  putCommittee,
+  putTemplate,
   postGovernanceDocument,
   postMeeting,
   postMemberImport,
@@ -194,6 +202,8 @@ export function createApp() {
   app.post('/api/v1/family-links', requireAuth, safe(postFamilyLink));
   app.get('/api/v1/committees', requireAuth, safe(getCommittees));
   app.post('/api/v1/committees', requireAuth, safe(postCommittee));
+  app.put('/api/v1/committees/:id', requireAuth, safe(putCommittee));
+  app.get('/api/v1/records/:kind/:id', requireAuth, safe(getRecord));
   app.post('/api/v1/committees/:id/appointments', requireAuth, safe(postAppointment));
   app.post('/api/v1/committees/:id/meetings', requireAuth, safe(postMeeting));
   app.post('/api/v1/meetings/:id/resolutions', requireAuth, safe(postResolution));
@@ -206,6 +216,7 @@ export function createApp() {
   app.post('/api/v1/claims', requireAuth, safe(postClaim));
   app.post('/api/v1/claims/:id/pay', requireAuth, safe(postPayClaim));
   app.get('/api/v1/approval-routes', requireAuth, safe(getRoutes));
+  app.get('/api/v1/approval-requests', requireAuth, safe(getApprovalRequests));
   app.post('/api/v1/approval-routes', requireAuth, safe(postRoute));
   app.post('/api/v1/approval-routes/:id/stages', requireAuth, safe(postStage));
   app.post('/api/v1/approval-requests', requireAuth, safe(postApprovalRequest));
@@ -221,14 +232,17 @@ export function createApp() {
   app.get('/api/v1/members/:id/ledger', requireAuth, safe(getMemberLedger));
   app.post('/api/v1/bank-accounts', requireAuth, safe(postBank));
   app.post('/api/v1/bank-statement-lines', requireAuth, safe(postStatement));
+  app.post('/api/v1/bank-accounts/:id/statement-import', requireAuth, safe(postStatementImport));
   app.post('/api/v1/bank-statement-lines/:id/match', requireAuth, safe(postMatch));
   app.get('/api/v1/bank-accounts/:id/reconciliation', requireAuth, safe(getReconciliation));
   app.post('/api/v1/budgets', requireAuth, safe(postBudget));
   app.get('/api/v1/budgets/:id', requireAuth, safe(getBudget));
   app.get('/api/v1/assets', requireAuth, safe(getAssets));
   app.post('/api/v1/assets', requireAuth, safe(postAsset));
+  app.post('/api/v1/assets/:id/dispose', requireAuth, safe(postDispose));
   app.post('/api/v1/investments', requireAuth, safe(postInvestment));
   app.post('/api/v1/fiscal-periods', requireAuth, safe(postPeriod));
+  app.post('/api/v1/fiscal-periods/:id/close', requireAuth, safe(postClosePeriod));
   app.get('/api/v1/journal-documents', requireAuth, safe(getJournals));
   app.post('/api/v1/journal-documents', requireAuth, safe(postJournalDocument));
   app.post('/api/v1/journal-documents/:id/lines', requireAuth, safe(postJournalLine));
@@ -254,7 +268,9 @@ export function createApp() {
   app.post('/api/v1/esg-goals/:id/kpis', requireAuth, safe(postKpi));
   app.post('/api/v1/esg/results', requireAuth, safe(postEsgResult));
   app.post('/api/v1/verifications', requireAuth, safe(postVerification));
+  app.get('/api/v1/notification-templates', requireAuth, safe(getTemplates));
   app.post('/api/v1/notification-templates', requireAuth, safe(postTemplate));
+  app.put('/api/v1/notification-templates/:id', requireAuth, safe(putTemplate));
 
   app.use((error: unknown, req: Request, res: Response, _next: NextFunction) => {
     if (error instanceof ZodError) {

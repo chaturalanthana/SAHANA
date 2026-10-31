@@ -125,6 +125,8 @@ export const en = {
       projects: 'Projects',
       emergency: 'Emergency',
       esg: 'ESG',
+      approvals: 'Approvals',
+      notifications: 'Notifications',
     },
     field: {
       memberNo: 'Member number',
@@ -175,6 +177,15 @@ export const en = {
     esg: {
       title: 'ESG',
       hint: 'Goals can be stored. A verified result counts only checked sources.',
+    },
+    screen: {
+      detail: 'Detail',
+      edit: 'Edit',
+    },
+    action: {
+      closePeriod: 'Close period',
+      dispose: 'Dispose asset',
+      importStatement: 'Import statement',
     },
     finance: {
       statements: 'Financial statements',

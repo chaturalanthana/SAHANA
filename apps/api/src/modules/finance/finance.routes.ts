@@ -11,7 +11,9 @@ import {
   createBudget,
   createFund,
   createInvestment,
+  disposeAsset,
   fundLedger,
+  importStatementCsv,
   listAssets,
   listFunds,
   matchStatement,
@@ -120,6 +122,26 @@ export function postAsset(req: Request, res: Response, next: NextFunction): void
     })
     .parse(req.body);
   void send(res, next, () => createAsset(allow(req, 'ledger.post'), body, req.traceId), 201);
+}
+
+export function postStatementImport(req: Request, res: Response, next: NextFunction): void {
+  const body = z.object({ csv: z.string().min(1).max(100_000) }).parse(req.body);
+  void send(res, next, () => importStatementCsv(allow(req, 'ledger.post'), String(req.params.id), body.csv, req.traceId), 201);
+}
+
+export function postDispose(req: Request, res: Response, next: NextFunction): void {
+  const body = z
+    .object({
+      periodId: z.string().uuid(),
+      cashAccountId: z.string().uuid(),
+      assetAccountId: z.string().uuid(),
+      gainAccountId: z.string().uuid(),
+      lossAccountId: z.string().uuid(),
+      proceeds: money,
+      reason: z.string().trim().min(1).max(2000),
+    })
+    .parse(req.body);
+  void send(res, next, () => disposeAsset(allow(req, 'ledger.post'), String(req.params.id), body, req.traceId));
 }
 
 export function postInvestment(req: Request, res: Response, next: NextFunction): void {
