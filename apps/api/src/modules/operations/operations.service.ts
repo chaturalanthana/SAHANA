@@ -7,6 +7,7 @@ import {
   knownCode,
   memberStatusAllowed,
 } from '../../domain/members';
+import { DEFAULT_LOAN_RULE, buildSchedule, parseLoanRule } from '../../domain/loans';
 import { DEFAULT_WELFARE_RULE, evaluateWelfare, parseWelfareRule } from '../../domain/welfare';
 import { ApiError } from '../../errors';
 
@@ -691,17 +692,24 @@ export async function reverseJournal(scope: Scope, documentId: string, reason: s
   }
 }
 
-export async function createLoanVersion(scope: Scope, productId: string, traceId: string) {
+export async function createLoanVersion(
+  scope: Scope,
+  productId: string,
+  traceId: string,
+  input?: { publish?: boolean; ruleBody?: unknown },
+) {
   return withSociety(scope, async (tx) => {
     const product = await tx.loanProduct.findFirst({ where: { id: productId, societyId: scope.societyId } });
     if (!product) throw new ApiError(404, 'not_found', 'errors.notFound');
     const count = await tx.loanProductVersion.count({ where: { productId } });
+    const publish = input?.publish === true;
     const created = await tx.loanProductVersion.create({
       data: {
         societyId: scope.societyId,
         productId,
         versionNo: count + 1,
-        ruleBody: {},
+        ruleBody: publish ? (parseLoanRule(input?.ruleBody) ?? DEFAULT_LOAN_RULE) : {},
+        publishedAt: publish ? new Date() : null,
         createdBy: scope.userId,
       },
     });
@@ -726,6 +734,139 @@ export async function createLoanApplication(
     });
     await audit(tx, scope, 'loans.application_recorded', 'loan_application', created.id, traceId);
     return row(created);
+  });
+}
+
+const CHART = [
+  ['1000', 'Cash', 'asset'],
+  ['1100', 'Bank', 'asset'],
+  ['1200', 'Contributions receivable', 'asset'],
+  ['1300', 'Loans receivable', 'asset'],
+  ['2000', 'Welfare payable', 'liability'],
+  ['3000', 'Member fund', 'equity'],
+  ['4000', 'Contribution income', 'income'],
+  ['4100', 'Interest income', 'income'],
+  ['5000', 'Welfare expense', 'expense'],
+  ['5100', 'Project expense', 'expense'],
+] as const;
+
+export async function seedChart(scope: Scope, traceId: string) {
+  return withSociety(scope, async (tx) => {
+    const created: string[] = [];
+    for (const [code, name, accountType] of CHART) {
+      const existing = await tx.account.findFirst({ where: { societyId: scope.societyId, code } });
+      if (existing) continue;
+      const account = await tx.account.create({
+        data: { societyId: scope.societyId, code, name, accountType, createdBy: scope.userId },
+      });
+      created.push(account.id);
+    }
+    await audit(tx, scope, 'ledger.chart_seeded', 'account', scope.societyId, traceId);
+    return { created: created.length };
+  });
+}
+
+export async function trialBalance(scope: Scope) {
+  return withSociety(scope, async (tx) => {
+    const accounts = await tx.account.findMany({ where: { societyId: scope.societyId }, orderBy: { code: 'asc' } });
+    const posted = await tx.journalDocument.findMany({
+      where: { societyId: scope.societyId, status: 'posted' },
+      select: { id: true },
+    });
+    const lines = await tx.journalLine.findMany({
+      where: { societyId: scope.societyId, documentId: { in: posted.map((item) => item.id) } },
+    });
+    const totals = new Map<string, { debit: Prisma.Decimal; credit: Prisma.Decimal }>();
+    for (const line of lines) {
+      const current = totals.get(line.accountId) ?? { debit: new Prisma.Decimal(0), credit: new Prisma.Decimal(0) };
+      current.debit = current.debit.plus(line.debit);
+      current.credit = current.credit.plus(line.credit);
+      totals.set(line.accountId, current);
+    }
+    let debit = new Prisma.Decimal(0);
+    let credit = new Prisma.Decimal(0);
+    const items = accounts.map((account) => {
+      const sum = totals.get(account.id) ?? { debit: new Prisma.Decimal(0), credit: new Prisma.Decimal(0) };
+      debit = debit.plus(sum.debit);
+      credit = credit.plus(sum.credit);
+      return { code: account.code, name: account.name, accountType: account.accountType, debit: sum.debit.toString(), credit: sum.credit.toString() };
+    });
+    return { items, debit: debit.toString(), credit: credit.toString(), balanced: debit.equals(credit) };
+  });
+}
+
+export async function generateLoanSchedule(
+  scope: Scope,
+  applicationId: string,
+  input: { principal: string; startOn: string },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const application = await tx.loanApplication.findFirst({ where: { id: applicationId, societyId: scope.societyId } });
+    if (!application) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const version = await tx.loanProductVersion.findFirst({
+      where: { id: application.productVersionId, societyId: scope.societyId },
+    });
+    const rule = version?.publishedAt ? parseLoanRule(version.ruleBody) : null;
+    if (!rule) throw new ApiError(409, 'not_calculated', 'modules.error.notCalculated');
+    await tx.loanScheduleLine.deleteMany({ where: { societyId: scope.societyId, applicationId } });
+    const lines = buildSchedule(input.principal, rule, new Date(input.startOn));
+    for (const line of lines) {
+      await tx.loanScheduleLine.create({
+        data: {
+          societyId: scope.societyId,
+          applicationId,
+          installmentNo: line.installmentNo,
+          dueOn: new Date(line.dueOn),
+          principal: line.principal,
+          interest: line.interest,
+          fee: line.fee,
+        },
+      });
+    }
+    await audit(tx, scope, 'loans.schedule_generated', 'loan_application', applicationId, traceId);
+    return { items: lines };
+  });
+}
+
+export async function payClaim(
+  scope: Scope,
+  claimId: string,
+  input: { periodId: string; expenseAccountId: string; cashAccountId: string; amount: string; reason: string },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const claim = await tx.claim.findFirst({ where: { id: claimId, societyId: scope.societyId } });
+    if (!claim) throw new ApiError(404, 'not_found', 'errors.notFound');
+    if (claim.status === 'paid') throw new ApiError(409, 'conflict', 'modules.error.immutable');
+    if (claim.status !== 'approved' && claim.status !== 'payable') {
+      throw new ApiError(409, 'conflict', 'errors.validation');
+    }
+    const document = await tx.journalDocument.create({
+      data: { societyId: scope.societyId, periodId: input.periodId, reason: input.reason, createdBy: scope.userId },
+    });
+    await tx.journalLine.create({
+      data: {
+        societyId: scope.societyId,
+        documentId: document.id,
+        accountId: input.expenseAccountId,
+        debit: new Prisma.Decimal(input.amount),
+        credit: new Prisma.Decimal(0),
+      },
+    });
+    await tx.journalLine.create({
+      data: {
+        societyId: scope.societyId,
+        documentId: document.id,
+        accountId: input.cashAccountId,
+        debit: new Prisma.Decimal(0),
+        credit: new Prisma.Decimal(input.amount),
+      },
+    });
+    await tx.$executeRaw`SELECT app_post_journal(${document.id}::uuid, ${scope.societyId}::uuid, ${scope.userId}::uuid)`;
+    await tx.claim.update({ where: { id: claimId }, data: { status: 'paid' } });
+    await audit(tx, scope, 'claims.paid', 'claim', claimId, traceId);
+    return { id: claimId, journalDocumentId: document.id, status: 'paid' };
   });
 }
 

@@ -544,14 +544,32 @@ model LoanProductVersion {
   id        String   @id @default(uuid()) @db.Uuid
   societyId String   @map("society_id") @db.Uuid
   productId String   @map("product_id") @db.Uuid
-  versionNo Int      @map("version_no")
-  ruleBody  Json     @default("{}") @map("rule_body")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  createdBy String   @map("created_by") @db.Uuid
+  versionNo   Int       @map("version_no")
+  ruleBody    Json      @default("{}") @map("rule_body")
+  publishedAt DateTime? @map("published_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy   String    @map("created_by") @db.Uuid
 
   @@unique([productId, versionNo])
   @@index([societyId])
   @@map("loan_product_versions")
+}
+
+model LoanScheduleLine {
+  id             String   @id @default(uuid()) @db.Uuid
+  societyId      String   @map("society_id") @db.Uuid
+  applicationId  String   @map("application_id") @db.Uuid
+  installmentNo  Int      @map("installment_no")
+  dueOn          DateTime @map("due_on") @db.Date
+  principal      Decimal  @db.Decimal(19, 4)
+  interest       Decimal  @db.Decimal(19, 4)
+  fee            Decimal  @default(0) @db.Decimal(19, 4)
+  status         String   @default("due")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([applicationId, installmentNo])
+  @@index([societyId, applicationId])
+  @@map("loan_schedule_lines")
 }
 
 model LoanApplication {

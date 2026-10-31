@@ -29,6 +29,7 @@ import {
   getEmergency,
   getFamily,
   getGoals,
+  getTrialBalance,
   getJournals,
   getLoans,
   getLookups,
@@ -47,6 +48,7 @@ import {
   getSuggestions,
   postAccount,
   postApprovalRequest,
+  postChart,
   postClaim,
   postAppointment,
   postCommittee,
@@ -68,7 +70,9 @@ import {
   postKpi,
   postLoan,
   postLoanApplication,
+  postLoanSchedule,
   postLoanVersion,
+  postPayClaim,
   postLookup,
   postMember,
   postMemberFamily,
@@ -179,6 +183,7 @@ export function createApp() {
   app.get('/api/v1/claims', requireAuth, safe(getClaims));
   app.get('/api/v1/claims/:id', requireAuth, safe(getClaim));
   app.post('/api/v1/claims', requireAuth, safe(postClaim));
+  app.post('/api/v1/claims/:id/pay', requireAuth, safe(postPayClaim));
   app.get('/api/v1/approval-routes', requireAuth, safe(getRoutes));
   app.post('/api/v1/approval-routes', requireAuth, safe(postRoute));
   app.post('/api/v1/approval-routes/:id/stages', requireAuth, safe(postStage));
@@ -186,6 +191,8 @@ export function createApp() {
   app.post('/api/v1/approval-requests/:id/decisions', requireAuth, safe(postDecision));
   app.get('/api/v1/accounts', requireAuth, safe(getAccounts));
   app.post('/api/v1/accounts', requireAuth, safe(postAccount));
+  app.post('/api/v1/ledger/chart', requireAuth, safe(postChart));
+  app.get('/api/v1/reports/trial-balance', requireAuth, safe(getTrialBalance));
   app.post('/api/v1/fiscal-periods', requireAuth, safe(postPeriod));
   app.get('/api/v1/journal-documents', requireAuth, safe(getJournals));
   app.post('/api/v1/journal-documents', requireAuth, safe(postJournalDocument));
@@ -196,6 +203,7 @@ export function createApp() {
   app.post('/api/v1/loan-products', requireAuth, safe(postLoan));
   app.post('/api/v1/loan-products/:id/versions', requireAuth, safe(postLoanVersion));
   app.post('/api/v1/loan-applications', requireAuth, safe(postLoanApplication));
+  app.post('/api/v1/loan-applications/:id/schedule', requireAuth, safe(postLoanSchedule));
   app.get('/api/v1/projects', requireAuth, safe(getProjects));
   app.post('/api/v1/projects', requireAuth, safe(postProject));
   app.get('/api/v1/suggestions', requireAuth, safe(getSuggestions));

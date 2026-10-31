@@ -26,6 +26,10 @@ import {
   createKpi,
   createLoanApplication,
   createLoanVersion,
+  generateLoanSchedule,
+  payClaim,
+  seedChart,
+  trialBalance,
   createLookup,
   createMember,
   createNamed,
@@ -396,7 +400,34 @@ export function postLoan(req: Request, res: Response, next: NextFunction): void 
 }
 
 export function postLoanVersion(req: Request, res: Response, next: NextFunction): void {
-  void send(res, next, () => createLoanVersion(allow(req, 'loans.write'), String(req.params.id), req.traceId), 201);
+  const body = z.object({ publish: z.boolean().optional(), ruleBody: z.record(z.unknown()).optional() }).parse(req.body ?? {});
+  void send(res, next, () => createLoanVersion(allow(req, 'loans.write'), String(req.params.id), req.traceId, body), 201);
+}
+
+export function postLoanSchedule(req: Request, res: Response, next: NextFunction): void {
+  const body = z.object({ principal: money, startOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.body);
+  void send(res, next, () => generateLoanSchedule(allow(req, 'loans.write'), String(req.params.id), body, req.traceId), 201);
+}
+
+export function postChart(req: Request, res: Response, next: NextFunction): void {
+  void send(res, next, () => seedChart(allow(req, 'ledger.post'), req.traceId), 201);
+}
+
+export function getTrialBalance(req: Request, res: Response, next: NextFunction): void {
+  void send(res, next, () => trialBalance(allow(req, 'ledger.read')));
+}
+
+export function postPayClaim(req: Request, res: Response, next: NextFunction): void {
+  const body = z
+    .object({
+      periodId: z.string().uuid(),
+      expenseAccountId: z.string().uuid(),
+      cashAccountId: z.string().uuid(),
+      amount: money,
+      reason: longText,
+    })
+    .parse(req.body);
+  void send(res, next, () => payClaim(allow(req, 'ledger.post'), String(req.params.id), body, req.traceId), 200);
 }
 
 export function postLoanApplication(req: Request, res: Response, next: NextFunction): void {
