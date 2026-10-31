@@ -7,6 +7,7 @@ import {
   knownCode,
   memberStatusAllowed,
 } from '../../domain/members';
+import { calculateEsg, type EsgMeasure, type EsgSource } from '../../domain/esg';
 import { DEFAULT_LOAN_RULE, buildSchedule, parseLoanRule } from '../../domain/loans';
 import { DEFAULT_WELFARE_RULE, evaluateWelfare, parseWelfareRule } from '../../domain/welfare';
 import { ApiError } from '../../errors';
@@ -1001,7 +1002,14 @@ export async function decideSuggestion(
 
 export async function createEmergency(
   scope: Scope,
-  input: { memberId: string; requestType: string; phone: string; description: string; idempotencyKey: string },
+  input: {
+    memberId: string;
+    requestType: string;
+    phone: string;
+    description?: string;
+    idempotencyKey: string;
+    locationPermitted?: boolean;
+  },
   traceId: string,
 ) {
   return withSociety(scope, async (tx) => {
@@ -1012,7 +1020,17 @@ export async function createEmergency(
     const member = await tx.member.findFirst({ where: { id: input.memberId, societyId: scope.societyId } });
     if (!member) throw new ApiError(404, 'not_found', 'errors.notFound');
     const created = await tx.emergencyRequest.create({
-      data: { societyId: scope.societyId, ...input, locationPermitted: false, createdBy: scope.userId },
+      data: {
+        societyId: scope.societyId,
+        memberId: input.memberId,
+        requestType: input.requestType,
+        phone: input.phone,
+        description: input.description ?? '',
+        idempotencyKey: input.idempotencyKey,
+        locationPermitted: input.locationPermitted ?? false,
+        status: 'submitted',
+        createdBy: scope.userId,
+      },
     });
     await audit(tx, scope, 'emergency.submitted', 'emergency_request', created.id, traceId);
     return row(created);
@@ -1060,21 +1078,74 @@ export function refuseEsgResult(): never {
   throw new ApiError(409, 'not_calculated', 'modules.error.notCalculated');
 }
 
+export async function verifySource(
+  scope: Scope,
+  input: { objectType: string; objectId: string },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const created = await tx.sourceVerification.create({
+      data: { societyId: scope.societyId, objectType: input.objectType, objectId: input.objectId, createdBy: scope.userId },
+    });
+    await audit(tx, scope, 'esg.source_verified', input.objectType, input.objectId, traceId);
+    return row(created);
+  });
+}
+
+export async function recordEsgResult(
+  scope: Scope,
+  input: {
+    measure: EsgMeasure;
+    periodStart: string;
+    periodEnd: string;
+    kpiId?: string;
+    sources: EsgSource[];
+  },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const verified = await tx.sourceVerification.findMany({
+      where: { societyId: scope.societyId, objectId: { in: input.sources.map((source) => source.id) } },
+    });
+    const verifiedIds = new Set(verified.map((item) => item.objectId));
+    const result = calculateEsg(
+      input.measure,
+      input.sources.map((source) => ({ ...source, verified: verifiedIds.has(source.id) })),
+    );
+    const created = await tx.esgResult.create({
+      data: {
+        societyId: scope.societyId,
+        kpiId: input.kpiId,
+        measure: input.measure,
+        periodStart: new Date(input.periodStart),
+        periodEnd: new Date(input.periodEnd),
+        verifiedTotal: result.verifiedTotal,
+        unverifiedCount: result.unverifiedCount,
+        sourceIds: result.sourceIds,
+        createdBy: scope.userId,
+      },
+    });
+    await audit(tx, scope, 'esg.result_recorded', 'esg_result', created.id, traceId);
+    return { ...row(created), verifiedTotal: result.verifiedTotal, unverifiedCount: result.unverifiedCount, sourceIds: result.sourceIds };
+  });
+}
+
 export async function createTemplate(
   scope: Scope,
   input: { code: string; language: 'en' | 'si' | 'ta'; body: string; channel?: string },
   traceId: string,
 ) {
-  if (input.channel && input.channel !== 'in_app') {
+  if (input.channel === 'whatsapp') {
     throw new ApiError(400, 'channel_disabled', 'modules.error.channelDisabled');
   }
+  const channel = input.channel === 'email' || input.channel === 'sms' ? input.channel : 'in_app';
   return withSociety(scope, async (tx) => {
     const created = await tx.notificationTemplate.create({
       data: {
         societyId: scope.societyId,
         code: input.code,
         language: input.language,
-        channel: 'in_app',
+        channel,
         body: input.body,
         createdBy: scope.userId,
       },

@@ -48,7 +48,9 @@ import {
   memberSection,
   myMember,
   postJournal,
+  recordEsgResult,
   refuseEsgResult,
+  verifySource,
   reverseJournal,
   updateEmergency,
 } from './operations.service';
@@ -519,7 +521,8 @@ export function postEmergency(req: Request, res: Response, next: NextFunction): 
       memberId: z.string().uuid(),
       requestType: text,
       phone: text,
-      description: longText,
+      description: z.string().max(2000).optional(),
+      locationPermitted: z.boolean().optional(),
       idempotencyKey: text,
     })
     .parse(req.body);
@@ -551,12 +554,57 @@ export function postKpi(req: Request, res: Response, next: NextFunction): void {
 }
 
 export function postEsgResult(req: Request, res: Response, next: NextFunction): void {
-  try {
-    allow(req, 'esg.read');
-    refuseEsgResult();
-  } catch (error) {
-    next(error);
+  const body = z
+    .object({
+      measure: z.enum(['participation_count', 'volunteer_hours', 'beneficiary_count', 'project_spend']).optional(),
+      periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      kpiId: z.string().uuid().optional(),
+      sources: z
+        .array(
+          z.object({
+            id: z.string().uuid(),
+            memberId: z.string().uuid().nullable().optional(),
+            familyMemberId: z.string().uuid().nullable().optional(),
+            hours: z.string().nullable().optional(),
+            amount: z.string().nullable().optional(),
+            journalDocumentId: z.string().uuid().nullable().optional(),
+          }),
+        )
+        .optional(),
+    })
+    .parse(req.body ?? {});
+  if (!body.measure || !body.periodStart || !body.periodEnd) {
+    try {
+      allow(req, 'esg.read');
+      refuseEsgResult();
+    } catch (error) {
+      next(error);
+    }
+    return;
   }
+  void send(
+    res,
+    next,
+    () =>
+      recordEsgResult(
+        allow(req, 'esg.write'),
+        {
+          measure: body.measure as 'participation_count' | 'volunteer_hours' | 'beneficiary_count' | 'project_spend',
+          periodStart: body.periodStart as string,
+          periodEnd: body.periodEnd as string,
+          kpiId: body.kpiId,
+          sources: (body.sources ?? []).map((source) => ({ ...source, verified: false })),
+        },
+        req.traceId,
+      ),
+    201,
+  );
+}
+
+export function postVerification(req: Request, res: Response, next: NextFunction): void {
+  const body = z.object({ objectType: text, objectId: z.string().uuid() }).parse(req.body);
+  void send(res, next, () => verifySource(allow(req, 'esg.write'), body, req.traceId), 201);
 }
 
 export function postTemplate(req: Request, res: Response, next: NextFunction): void {

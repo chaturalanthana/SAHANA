@@ -691,6 +691,35 @@ model EmergencyUpdate {
   @@map("emergency_updates")
 }
 
+model EsgResult {
+  id               String   @id @default(uuid()) @db.Uuid
+  societyId        String   @map("society_id") @db.Uuid
+  kpiId            String?  @map("kpi_id") @db.Uuid
+  measure          String
+  periodStart      DateTime @map("period_start") @db.Date
+  periodEnd        DateTime @map("period_end") @db.Date
+  verifiedTotal    Decimal  @map("verified_total") @db.Decimal(19, 4)
+  unverifiedCount  Int      @map("unverified_count")
+  sourceIds        Json     @map("source_ids")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy        String   @map("created_by") @db.Uuid
+
+  @@index([societyId, measure])
+  @@map("esg_results")
+}
+
+model SourceVerification {
+  id         String   @id @default(uuid()) @db.Uuid
+  societyId  String   @map("society_id") @db.Uuid
+  objectType String   @map("object_type")
+  objectId   String   @map("object_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy  String   @map("created_by") @db.Uuid
+
+  @@unique([societyId, objectType, objectId])
+  @@map("source_verifications")
+}
+
 model EsgGoal {
   id        String   @id @default(uuid()) @db.Uuid
   societyId String   @map("society_id") @db.Uuid

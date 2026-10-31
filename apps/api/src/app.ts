@@ -88,6 +88,7 @@ import {
   postSuggestion,
   postSuggestionDecision,
   postTemplate,
+  postVerification,
 } from './modules/operations/operations.routes';
 
 export function createApp() {
@@ -220,6 +221,7 @@ export function createApp() {
   app.post('/api/v1/esg-goals', requireAuth, safe(postGoal));
   app.post('/api/v1/esg-goals/:id/kpis', requireAuth, safe(postKpi));
   app.post('/api/v1/esg/results', requireAuth, safe(postEsgResult));
+  app.post('/api/v1/verifications', requireAuth, safe(postVerification));
   app.post('/api/v1/notification-templates', requireAuth, safe(postTemplate));
 
   app.use((error: unknown, req: Request, res: Response, _next: NextFunction) => {
