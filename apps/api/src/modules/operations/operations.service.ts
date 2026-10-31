@@ -1,6 +1,12 @@
 import { Prisma } from '@prisma/client';
 import type { Page } from '@sahana/types';
 import { withSociety, type Scope } from '../../db';
+import {
+  DEFAULT_MEMBER_CATEGORIES,
+  DEFAULT_RELATIONSHIPS,
+  knownCode,
+  memberStatusAllowed,
+} from '../../domain/members';
 import { ApiError } from '../../errors';
 
 function present(value: unknown): unknown {
@@ -56,6 +62,11 @@ export async function listMembers(scope: Scope, page: number, pageSize: number) 
   });
 }
 
+async function lookupCodes(tx: Prisma.TransactionClient, societyId: string, listCode: string): Promise<string[]> {
+  const rows = await tx.lookupValue.findMany({ where: { societyId, listCode }, select: { code: true } });
+  return rows.map((item) => item.code);
+}
+
 export async function createMember(
   scope: Scope,
   input: {
@@ -71,6 +82,16 @@ export async function createMember(
   traceId: string,
 ) {
   return withSociety(scope, async (tx) => {
+    const [statusCodes, categoryCodes] = await Promise.all([
+      lookupCodes(tx, scope.societyId, 'member_status'),
+      lookupCodes(tx, scope.societyId, 'member_category'),
+    ]);
+    if (!memberStatusAllowed(input.statusCode, null, statusCodes)) {
+      throw new ApiError(422, 'rule_rejected', 'errors.validation');
+    }
+    if (!knownCode(input.categoryCode, DEFAULT_MEMBER_CATEGORIES, categoryCodes)) {
+      throw new ApiError(422, 'rule_rejected', 'errors.validation');
+    }
     const created = await tx.member.create({
       data: {
         societyId: scope.societyId,
@@ -142,7 +163,11 @@ export async function changeMemberStatus(
   traceId: string,
 ) {
   return withSociety(scope, async (tx) => {
-    await requireMember(tx, scope, memberId);
+    const member = await requireMember(tx, scope, memberId);
+    const statusCodes = await lookupCodes(tx, scope.societyId, 'member_status');
+    if (!memberStatusAllowed(input.statusCode, member.statusCode, statusCodes)) {
+      throw new ApiError(422, 'rule_rejected', 'errors.validation');
+    }
     await tx.memberStatusHistory.create({
       data: {
         societyId: scope.societyId,
@@ -195,6 +220,10 @@ export async function addMemberFamily(
 ) {
   return withSociety(scope, async (tx) => {
     await requireMember(tx, scope, memberId);
+    const relationships = await lookupCodes(tx, scope.societyId, 'family_relationship');
+    if (!knownCode(input.relationshipCode, DEFAULT_RELATIONSHIPS, relationships)) {
+      throw new ApiError(422, 'rule_rejected', 'errors.validation');
+    }
     const person = await tx.familyMember.create({
       data: {
         societyId: scope.societyId,
@@ -731,6 +760,161 @@ export async function createTemplate(
       },
     });
     await audit(tx, scope, 'notifications.template_stored', 'notification_template', created.id, traceId);
+    return row(created);
+  });
+}
+
+type ImportRow = {
+  memberNo: string;
+  givenName: string;
+  familyName: string;
+  statusCode: string;
+  categoryCode: string;
+  employeeNo?: string;
+  department?: string;
+};
+
+export async function importMembers(
+  scope: Scope,
+  input: { trial: boolean; rows: ImportRow[] },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const [statusCodes, categoryCodes, existing] = await Promise.all([
+      lookupCodes(tx, scope.societyId, 'member_status'),
+      lookupCodes(tx, scope.societyId, 'member_category'),
+      tx.member.findMany({ where: { societyId: scope.societyId }, select: { memberNo: true } }),
+    ]);
+    const seen = new Set(existing.map((item) => item.memberNo));
+    const rejected: { row: number; memberNo: string; messageKey: string }[] = [];
+    input.rows.forEach((item, index) => {
+      if (!item.memberNo || !item.givenName || !item.familyName) {
+        rejected.push({ row: index + 1, memberNo: item.memberNo ?? '', messageKey: 'errors.validation' });
+        return;
+      }
+      if (seen.has(item.memberNo)) {
+        rejected.push({ row: index + 1, memberNo: item.memberNo, messageKey: 'errors.validation' });
+        return;
+      }
+      if (!memberStatusAllowed(item.statusCode, null, statusCodes)) {
+        rejected.push({ row: index + 1, memberNo: item.memberNo, messageKey: 'errors.validation' });
+        return;
+      }
+      if (!knownCode(item.categoryCode, DEFAULT_MEMBER_CATEGORIES, categoryCodes)) {
+        rejected.push({ row: index + 1, memberNo: item.memberNo, messageKey: 'errors.validation' });
+        return;
+      }
+      seen.add(item.memberNo);
+    });
+    if (rejected.length > 0 || input.trial) {
+      return { trial: input.trial, created: 0, rejected, accepted: input.rows.length - rejected.length };
+    }
+    for (const item of input.rows) {
+      const created = await tx.member.create({
+        data: {
+          societyId: scope.societyId,
+          memberNo: item.memberNo,
+          givenName: item.givenName,
+          familyName: item.familyName,
+          employeeNo: item.employeeNo ?? '',
+          department: item.department ?? '',
+          statusCode: item.statusCode,
+          categoryCode: item.categoryCode,
+          createdBy: scope.userId,
+          updatedBy: scope.userId,
+        },
+      });
+      await tx.memberStatusHistory.create({
+        data: {
+          societyId: scope.societyId,
+          memberId: created.id,
+          statusCode: item.statusCode,
+          reason: 'Imported',
+          createdBy: scope.userId,
+        },
+      });
+    }
+    await audit(tx, scope, 'members.imported', 'member', scope.societyId, traceId);
+    return { trial: false, created: input.rows.length, rejected: [], accepted: input.rows.length };
+  });
+}
+
+export async function createAppointment(
+  scope: Scope,
+  committeeId: string,
+  input: { memberId: string; roleTitle: string; startsOn: string; endsOn?: string },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const committee = await tx.committee.findFirst({ where: { id: committeeId, societyId: scope.societyId } });
+    const member = await tx.member.findFirst({ where: { id: input.memberId, societyId: scope.societyId } });
+    if (!committee || !member) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const created = await tx.committeeAppointment.create({
+      data: {
+        societyId: scope.societyId,
+        committeeId,
+        memberId: input.memberId,
+        roleTitle: input.roleTitle,
+        startsOn: new Date(input.startsOn),
+        endsOn: input.endsOn ? new Date(input.endsOn) : null,
+        createdBy: scope.userId,
+      },
+    });
+    await audit(tx, scope, 'governance.appointed', 'committee_appointment', created.id, traceId);
+    return row(created);
+  });
+}
+
+export async function createMeeting(
+  scope: Scope,
+  committeeId: string,
+  input: { title: string; heldOn: string },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const committee = await tx.committee.findFirst({ where: { id: committeeId, societyId: scope.societyId } });
+    if (!committee) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const created = await tx.meeting.create({
+      data: {
+        societyId: scope.societyId,
+        committeeId,
+        title: input.title,
+        heldOn: new Date(input.heldOn),
+        createdBy: scope.userId,
+      },
+    });
+    await audit(tx, scope, 'governance.meeting_recorded', 'meeting', created.id, traceId);
+    return row(created);
+  });
+}
+
+export async function createResolution(
+  scope: Scope,
+  meetingId: string,
+  input: { title: string },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const meeting = await tx.meeting.findFirst({ where: { id: meetingId, societyId: scope.societyId } });
+    if (!meeting) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const created = await tx.resolution.create({
+      data: { societyId: scope.societyId, meetingId, title: input.title, createdBy: scope.userId },
+    });
+    await audit(tx, scope, 'governance.resolution_recorded', 'resolution', created.id, traceId);
+    return row(created);
+  });
+}
+
+export async function createGovernanceDocument(
+  scope: Scope,
+  input: { title: string; language: string; storageKey: string },
+  traceId: string,
+) {
+  return withSociety(scope, async (tx) => {
+    const created = await tx.governanceDocument.create({
+      data: { societyId: scope.societyId, ...input, createdBy: scope.userId },
+    });
+    await audit(tx, scope, 'governance.document_recorded', 'governance_document', created.id, traceId);
     return row(created);
   });
 }

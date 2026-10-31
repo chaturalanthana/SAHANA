@@ -17,7 +17,7 @@ async function createOfficer(email: string, societyName: string) {
     data: { societyId: society.id, userId: user.id, createdBy: user.id },
   });
   const role = await prisma.role.create({ data: { societyId: society.id, code: 'officer', name: 'Officer' } });
-  for (const code of ['members.read', 'members.write', 'welfare.read', 'welfare.write', 'ledger.read', 'ledger.post', 'esg.read', 'notifications.write']) {
+  for (const code of ['members.read', 'members.write', 'governance.read', 'governance.write', 'welfare.read', 'welfare.write', 'ledger.read', 'ledger.post', 'esg.read', 'notifications.write']) {
     const permission = await prisma.permission.upsert({
       where: { code },
       update: {},
@@ -54,8 +54,8 @@ describe('operational modules', () => {
         memberNo: 'M-1',
         givenName: 'Nimal',
         familyName: 'Perera',
-        statusCode: 'recorded',
-        categoryCode: 'recorded',
+        statusCode: 'applied',
+        categoryCode: 'employee',
       });
     expect(created.status).toBe(201);
 
@@ -73,14 +73,14 @@ describe('operational modules', () => {
       .post(`/api/v1/members/${created.body.id}/status`)
       .set('cookie', alphaCookie)
       .set('x-sahana-client', 'web')
-      .send({ statusCode: 'left', reason: 'Later status' });
+      .send({ statusCode: 'active', reason: 'Later status' });
     expect(changed.status).toBe(201);
-    expect(changed.body.statusCode).toBe('left');
+    expect(changed.body.statusCode).toBe('active');
     const history = await request(app)
       .get(`/api/v1/members/${created.body.id}/history`)
       .set('cookie', alphaCookie)
       .set('x-sahana-client', 'web');
-    expect(history.body.items.map((item: { statusCode: string }) => item.statusCode)).toEqual(['recorded', 'left']);
+    expect(history.body.items.map((item: { statusCode: string }) => item.statusCode)).toEqual(['applied', 'active']);
     const family = await request(app)
       .post(`/api/v1/members/${created.body.id}/family`)
       .set('cookie', alphaCookie)
@@ -125,6 +125,61 @@ describe('operational modules', () => {
         idempotencyKey: 'claim-once',
       });
     expect(again.body.id).toBe(claim.body.id);
+
+    const usersBefore = await prisma.user.count();
+    const familyAgain = await request(app)
+      .post(`/api/v1/members/${created.body.id}/family`)
+      .set('cookie', alphaCookie)
+      .set('x-sahana-client', 'web')
+      .send({ givenName: 'Saman', familyName: 'Perera', relationshipCode: 'not-a-login' });
+    expect(familyAgain.status).toBe(422);
+    expect(await prisma.user.count()).toBe(usersBefore);
+
+    const blocked = await request(app)
+      .post(`/api/v1/members/${created.body.id}/status`)
+      .set('cookie', alphaCookie)
+      .set('x-sahana-client', 'web')
+      .send({ statusCode: 'reinstated', reason: 'Skip' });
+    expect(blocked.status).toBe(422);
+
+    const imported = await request(app)
+      .post('/api/v1/members/import')
+      .set('cookie', alphaCookie)
+      .set('x-sahana-client', 'web')
+      .send({
+        rows: [
+          { memberNo: 'M-2', givenName: 'A', familyName: 'B', statusCode: 'applied', categoryCode: 'employee' },
+          { memberNo: 'M-2', givenName: 'C', familyName: 'D', statusCode: 'applied', categoryCode: 'employee' },
+        ],
+      });
+    expect(imported.status).toBe(200);
+    expect(imported.body.created).toBe(0);
+    expect(imported.body.rejected.length).toBeGreaterThan(0);
+    const stillOne = await request(app).get('/api/v1/members').set('cookie', alphaCookie).set('x-sahana-client', 'web');
+    expect(stillOne.body.items).toHaveLength(1);
+
+    const committee = await request(app)
+      .post('/api/v1/committees')
+      .set('cookie', alphaCookie)
+      .set('x-sahana-client', 'web')
+      .send({ name: 'Welfare committee' });
+    const meeting = await request(app)
+      .post(`/api/v1/committees/${committee.body.id}/meetings`)
+      .set('cookie', alphaCookie)
+      .set('x-sahana-client', 'web')
+      .send({ title: 'October meeting', heldOn: '2026-10-31' });
+    const resolution = await request(app)
+      .post(`/api/v1/meetings/${meeting.body.id}/resolutions`)
+      .set('cookie', alphaCookie)
+      .set('x-sahana-client', 'web')
+      .send({ title: 'Note the register' });
+    expect(resolution.status).toBe(201);
+    const appointment = await request(app)
+      .post(`/api/v1/committees/${committee.body.id}/appointments`)
+      .set('cookie', alphaCookie)
+      .set('x-sahana-client', 'web')
+      .send({ memberId: created.body.id, roleTitle: 'Secretary', startsOn: '2026-10-01' });
+    expect(appointment.status).toBe(201);
   });
 
   it('posts a balanced journal and refuses an edit or an ESG result', async () => {

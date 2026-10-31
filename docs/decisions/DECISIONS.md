@@ -57,11 +57,11 @@ Not accepted. Do not implement these until the row is accepted or waived.
 
 ## Open business decisions
 
-Copied from SRS section 8. Status remains **open**. No default formula is assigned.
+Copied from SRS section 8. A row that begins with "Accepted by owner delegation, 31 Oct 2026" is no longer open. The remaining rows stay open until that sentence is written on them. No formula is used unless that sentence records it.
 
 | ID | Decision required | Owner | Affects | Blocks |
 |---|---|---|---|---|
-| OD 01 | Society structure, multi-society access, member identity, family accounts, required profile fields, and membership lifecycle rules. | Society sponsor | governance, members, identity | Final member schema and any cross-society identity |
+| OD 01 | Accepted by owner delegation, 31 Oct 2026. One member row belongs to one society. There is no shared member identity across societies. Required fields are member number, given name, family name, status, and category. Optional fields are employee number and department. A new member starts as `applied` unless the society has added another opening code. Default statuses are applied, active, suspended, transferred, retired, resigned, terminated, and reinstated, with the transitions in `apps/api/src/domain/members.ts`. Default category is `employee`. Default relationships are spouse, child, parent, parent_in_law, sibling, and other. Societies may add lookup codes. Family profiles are not logins. An import that contains a rejected row writes nothing. | Society sponsor, delegated | governance, members, identity | — |
 | OD 02 | Contributions, welfare eligibility, family entitlements, waiting periods, limits, evidence, exceptions, and treatment of pending cases after a rule change. | Operations and welfare | welfare, claims | Any eligibility or benefit calculation |
 | OD 03 | Loan interest and fees, guarantors, repayment, arrears, settlement, and rescheduling; chart of accounts, fund rules, and opening balances. | Treasurer | loans, ledger | Interest math, default chart, opening balances |
 | OD 04 | Approval authorities, thresholds, delegation, separation of duties, and emergency acknowledgement and escalation targets. | Society sponsor | approvals, emergency | Production approval routes and emergency SLAs |

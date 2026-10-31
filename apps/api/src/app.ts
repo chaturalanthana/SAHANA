@@ -47,7 +47,12 @@ import {
   postAccount,
   postApprovalRequest,
   postClaim,
+  postAppointment,
   postCommittee,
+  postGovernanceDocument,
+  postMeeting,
+  postMemberImport,
+  postResolution,
   postDecision,
   postEmergency,
   postEmergencyUpdate,
@@ -147,6 +152,7 @@ export function createApp() {
   app.post('/api/v1/lookups', requireAuth, safe(postLookup));
   app.get('/api/v1/members', requireAuth, safe(getMembers));
   app.post('/api/v1/members', requireAuth, safe(postMember));
+  app.post('/api/v1/members/import', requireAuth, safe(postMemberImport));
   app.get('/api/v1/members/me', requireAuth, safe(getMyMember));
   app.get('/api/v1/members/:id', requireAuth, safe(getMemberProfile));
   app.get('/api/v1/members/:id/history', requireAuth, safe(getMemberHistory));
@@ -162,6 +168,10 @@ export function createApp() {
   app.post('/api/v1/family-links', requireAuth, safe(postFamilyLink));
   app.get('/api/v1/committees', requireAuth, safe(getCommittees));
   app.post('/api/v1/committees', requireAuth, safe(postCommittee));
+  app.post('/api/v1/committees/:id/appointments', requireAuth, safe(postAppointment));
+  app.post('/api/v1/committees/:id/meetings', requireAuth, safe(postMeeting));
+  app.post('/api/v1/meetings/:id/resolutions', requireAuth, safe(postResolution));
+  app.post('/api/v1/governance-documents', requireAuth, safe(postGovernanceDocument));
   app.get('/api/v1/welfare-schemes', requireAuth, safe(getSchemes));
   app.post('/api/v1/welfare-schemes', requireAuth, safe(postScheme));
   app.post('/api/v1/welfare-schemes/:id/versions', requireAuth, safe(postSchemeVersion));

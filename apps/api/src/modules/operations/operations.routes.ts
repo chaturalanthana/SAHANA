@@ -13,7 +13,12 @@ import {
   createApprovalRoute,
   createApprovalStage,
   createClaim,
+  createAppointment,
   createEmergency,
+  createGovernanceDocument,
+  createMeeting,
+  createResolution,
+  importMembers,
   createFamilyLink,
   createFamilyMember,
   createJournal,
@@ -93,6 +98,33 @@ export function postMember(req: Request, res: Response, next: NextFunction): voi
     })
     .parse(req.body);
   void send(res, next, () => createMember(allow(req, 'members.write'), body, req.traceId), 201);
+}
+
+export function postMemberImport(req: Request, res: Response, next: NextFunction): void {
+  const body = z
+    .object({
+      trial: z.boolean().optional(),
+      rows: z
+        .array(
+          z.object({
+            memberNo: z.string().max(80),
+            givenName: z.string().max(200),
+            familyName: z.string().max(200),
+            statusCode: z.string().max(80),
+            categoryCode: z.string().max(80),
+            employeeNo: z.string().max(80).optional(),
+            department: z.string().max(120).optional(),
+          }),
+        )
+        .max(500),
+    })
+    .parse(req.body);
+  void send(
+    res,
+    next,
+    () => importMembers(allow(req, 'members.write'), { trial: body.trial ?? false, rows: body.rows }, req.traceId),
+    200,
+  );
 }
 
 export function getMyMember(req: Request, res: Response, next: NextFunction): void {
@@ -182,6 +214,33 @@ export function getCommittees(req: Request, res: Response, next: NextFunction): 
 export function postCommittee(req: Request, res: Response, next: NextFunction): void {
   const body = z.object({ name: text }).parse(req.body);
   void send(res, next, () => createNamed(allow(req, 'governance.write'), 'committee', body, req.traceId), 201);
+}
+
+export function postAppointment(req: Request, res: Response, next: NextFunction): void {
+  const body = z
+    .object({
+      memberId: z.string().uuid(),
+      roleTitle: text,
+      startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    })
+    .parse(req.body);
+  void send(res, next, () => createAppointment(allow(req, 'governance.write'), String(req.params.id), body, req.traceId), 201);
+}
+
+export function postMeeting(req: Request, res: Response, next: NextFunction): void {
+  const body = z.object({ title: text, heldOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.body);
+  void send(res, next, () => createMeeting(allow(req, 'governance.write'), String(req.params.id), body, req.traceId), 201);
+}
+
+export function postResolution(req: Request, res: Response, next: NextFunction): void {
+  const body = z.object({ title: text }).parse(req.body);
+  void send(res, next, () => createResolution(allow(req, 'governance.write'), String(req.params.id), body, req.traceId), 201);
+}
+
+export function postGovernanceDocument(req: Request, res: Response, next: NextFunction): void {
+  const body = z.object({ title: text, language: z.enum(['en', 'si', 'ta']), storageKey: text }).parse(req.body);
+  void send(res, next, () => createGovernanceDocument(allow(req, 'governance.write'), body, req.traceId), 201);
 }
 
 export function getSchemes(req: Request, res: Response, next: NextFunction): void {
