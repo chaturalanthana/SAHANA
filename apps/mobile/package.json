@@ -1,0 +1,29 @@
+{
+  "name": "@sahana/mobile",
+  "version": "0.1.0",
+  "main": "index.ts",
+  "private": true,
+  "dependencies": {
+    "@sahana/api-client": "workspace:*",
+    "@sahana/design-tokens": "workspace:*",
+    "@sahana/i18n": "workspace:*",
+    "@sahana/types": "workspace:*",
+    "@sahana/ui-mobile": "workspace:*",
+    "expo": "~58.0.21",
+    "expo-secure-store": "~58.0.2",
+    "expo-status-bar": "~58.0.4",
+    "react": "19.3.0",
+    "react-native": "0.88.1"
+  },
+  "devDependencies": {
+    "@types/react": "~19.3.0",
+    "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit"
+  }
+}

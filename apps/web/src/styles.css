@@ -1,0 +1,46 @@
+@import '@fontsource/noto-sans/400.css';
+@import '@fontsource/noto-sans/600.css';
+@import '@fontsource/noto-sans-sinhala/400.css';
+@import '@fontsource/noto-sans-sinhala/600.css';
+@import '@fontsource/noto-sans-tamil/400.css';
+@import '@fontsource/noto-sans-tamil/600.css';
+@import 'tailwindcss';
+@source '../../../packages/ui-web/src';
+
+@theme {
+  --color-bg: #f3f0e8;
+  --color-surface: #fffcf7;
+  --color-text: #1c2430;
+  --color-muted: #5c6b7a;
+  --color-border: #ddd6c8;
+  --color-primary: #0f5e5b;
+  --color-primary-text: #f7fffe;
+  --color-danger: #9f2d2d;
+  --color-warning: #8a5a00;
+  --color-success: #1f7a4d;
+  --color-info: #1d4e89;
+  --color-sidebar: #123f3d;
+  --color-sidebar-text: #f4f1ea;
+}
+
+body {
+  margin: 0;
+  font-family: 'Noto Sans', 'Noto Sans Sinhala', 'Noto Sans Tamil', sans-serif;
+  line-height: 1.6;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

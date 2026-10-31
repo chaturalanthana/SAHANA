@@ -1,0 +1,39 @@
+{
+  "name": "@sahana/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@fontsource/noto-sans": "^5.2.8",
+    "@fontsource/noto-sans-sinhala": "^5.2.8",
+    "@fontsource/noto-sans-tamil": "^5.2.8",
+    "@hookform/resolvers": "^5.2.2",
+    "@sahana/api-client": "workspace:*",
+    "@sahana/design-tokens": "workspace:*",
+    "@sahana/i18n": "workspace:*",
+    "@sahana/types": "workspace:*",
+    "@sahana/ui-web": "workspace:*",
+    "@sahana/validation": "workspace:*",
+    "@tanstack/react-query": "^5.90.5",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-hook-form": "^7.65.0",
+    "react-router-dom": "^7.9.4",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "@tailwindcss/vite": "^4.1.16",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.1.0",
+    "tailwindcss": "^4.1.16",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12"
+  }
+}

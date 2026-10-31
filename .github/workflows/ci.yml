@@ -1,0 +1,55 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sahana_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sahana_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # Disposable CI database only. This is not a production credential.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sahana_test
+      SESSION_SECRET: ci-session-secret-is-not-a-production-key
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @sahana/api exec prisma generate
+      - run: pnpm db:migrate
+      - run: pnpm i18n:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - name: Create a disposable demo password
+        run: echo "SEED_DEMO_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
+      - run: pnpm db:seed
+        env:
+          SEED_DEMO: "true"
+          NODE_ENV: development
+      - run: pnpm --filter @sahana/web exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+        env:
+          SEED_DEMO: "true"
+          CI: "true"

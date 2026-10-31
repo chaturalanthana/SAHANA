@@ -1,0 +1,31 @@
+{
+  "name": "sahana",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "test:e2e": "pnpm --filter @sahana/web test:e2e",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "i18n:check": "pnpm --filter @sahana/i18n check",
+    "dev:api": "pnpm --filter @sahana/api dev",
+    "dev:web": "pnpm --filter @sahana/web dev",
+    "db:migrate": "pnpm --filter @sahana/api db:migrate",
+    "db:seed": "pnpm --filter @sahana/api db:seed",
+    "db:up": "pnpm --filter @sahana/api db:up"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "eslint": "^9.39.1",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.2"
+  }
+}

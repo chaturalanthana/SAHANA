@@ -1,0 +1,80 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.expo/
+.expo-shared/
+web-build/
+
+# TypeScript
+*.tsbuildinfo
+
+# Test and coverage
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+blob-report/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Caches
+.cache/
+.turbo/
+.eslintcache
+.vite/
+*.local
+
+# Prisma local artifacts (generated client stays out of source control if emitted to a build dir)
+# Keep prisma/schema and migrations tracked. Ignore generated client only when it lives here:
+apps/api/src/generated/
+
+# React Native / Expo / Metro
+.metro-health-check*
+android/.gradle/
+android/app/build/
+android/build/
+ios/Pods/
+ios/build/
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+
+# IDE and OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local agent and editor scratch
+.cursor/
+*.plan.md
+
+# Local embedded PostgreSQL data
+.pgdata/
+apps/api/test/.test-env.json

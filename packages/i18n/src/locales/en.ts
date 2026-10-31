@@ -1,0 +1,182 @@
+/** English source catalog. Other locales must contain the same keys. */
+export const en = {
+  common: {
+    appName: 'SAHANA',
+    language: {
+      en: 'English',
+      si: 'Sinhala',
+      ta: 'Tamil',
+      label: 'Language',
+    },
+    action: {
+      save: 'Save',
+      cancel: 'Cancel',
+      signIn: 'Sign in',
+      signOut: 'Sign out',
+      retry: 'Retry',
+      approve: 'Approve',
+      close: 'Close',
+    },
+    state: {
+      loading: 'Loading',
+      empty: 'Nothing here yet',
+      error: 'Something went wrong',
+    },
+  },
+  auth: {
+    signIn: {
+      title: 'Sign in',
+      email: 'Email',
+      password: 'Password',
+      submit: 'Sign in',
+      failed: 'Email or password is not valid',
+      society: 'Society',
+      chooseSociety: 'Choose a society',
+      rateLimited: 'Too many sign-in attempts. Try again later.',
+    },
+  },
+  shell: {
+    nav: {
+      menu: 'Menu',
+      config: 'Configuration',
+      home: 'Home',
+    },
+    user: {
+      menu: 'Account',
+    },
+    environment: {
+      banner: 'Environment',
+    },
+    emergency: {
+      title: 'Emergency assistance',
+      disabled: 'Submission is not available yet',
+      notASubstitute:
+        'SAHANA coordinates society welfare assistance and does not replace ambulance, police, or other emergency services.',
+    },
+  },
+  config: {
+    title: 'Configuration',
+    description: 'Society settings that apply on the web, the mobile app, and the API.',
+    field: {
+      displayName: 'Society name',
+      logoFileId: 'Logo file reference',
+      contactEmail: 'Contact email',
+      contactPhone: 'Contact phone',
+      defaultLanguage: 'Default language',
+      currencyCode: 'Currency',
+      timezone: 'Timezone',
+      environmentLabel: 'Environment',
+    },
+    reason: {
+      label: 'Reason for change',
+    },
+    save: {
+      success: 'Saved',
+    },
+    critical: {
+      pending: 'This change waits for a second person to approve it.',
+      approve: 'Approve change',
+      selfApproval: 'You cannot approve a change you submitted.',
+    },
+    consent: {
+      title: 'Terms and privacy',
+      empty: 'No terms or privacy text have been published yet.',
+    },
+    error: {
+      forbidden: 'You do not have permission to change this setting.',
+    },
+  },
+  errors: {
+    unauthorized: 'Sign in to continue',
+    forbidden: 'You do not have permission to do that',
+    notFound: 'That record is not available',
+    validation: 'Check the highlighted fields',
+    generic: 'The request could not be completed',
+    rateLimited: 'Too many attempts. Try again later.',
+  },
+  modules: {
+    notice:
+      'These records are stored for the society. Welfare eligibility, loan interest, approval thresholds, and ESG results are not calculated.',
+    saved: 'Saved',
+    nav: {
+      members: 'Members',
+      governance: 'Governance',
+      welfare: 'Welfare',
+      ledger: 'Ledger',
+      loans: 'Loans',
+      projects: 'Projects',
+      emergency: 'Emergency',
+      esg: 'ESG',
+    },
+    field: {
+      memberNo: 'Member number',
+      givenName: 'Given name',
+      familyName: 'Family name',
+      statusCode: 'Status code',
+      categoryCode: 'Category code',
+      name: 'Name',
+      relationshipCode: 'Relationship code',
+      requestType: 'Request type',
+      phone: 'Phone',
+      description: 'Description',
+      accountCode: 'Account code',
+      accountName: 'Account name',
+      accountType: 'Account type',
+      reason: 'Reason',
+      debit: 'Debit',
+      credit: 'Credit',
+    },
+    members: {
+      title: 'Members and family',
+      hint: 'Status and category codes are entered by the society. A family profile is not a login, and eligibility is not calculated.',
+    },
+    governance: {
+      title: 'Governance',
+      hint: 'Committee names are entered by the society. Voting is not part of this version.',
+    },
+    welfare: {
+      title: 'Welfare',
+      hint: 'A scheme can be stored. Eligibility stays not calculated until the society rule is accepted.',
+    },
+    ledger: {
+      title: 'Ledger',
+      hint: 'The chart of accounts starts empty. A journal posts only when debits equal credits. Posted lines are not edited.',
+    },
+    loans: {
+      title: 'Loans',
+      hint: 'Applications are stored. Interest, fees, and repayment schedules are not calculated.',
+    },
+    projects: {
+      title: 'Projects and suggestions',
+      hint: 'A suggestion keeps its original text when it is accepted, declined, or kept for later.',
+    },
+    emergency: {
+      title: 'Emergency assistance',
+      hint: 'SAHANA coordinates society welfare assistance and does not replace ambulance, police, or other emergency services.',
+    },
+    esg: {
+      title: 'ESG',
+      hint: 'Goals can be stored. Verified results are not calculated.',
+    },
+    member: {
+      history: 'Status history',
+      family: 'Family',
+      contributions: 'Contributions',
+      welfare: 'Welfare',
+      loans: 'Loans',
+      projects: 'Projects',
+      documents: 'Documents',
+      notifications: 'Notifications',
+      newStatus: 'New status code',
+      open: 'Open',
+      notCalculatedSection: 'Nothing in this section has been calculated.',
+    },
+    error: {
+      unbalanced: 'The journal does not balance.',
+      immutable: 'A posted entry cannot be changed.',
+      notCalculated: 'This result is not calculated.',
+      periodClosed: 'That period is closed.',
+      channelDisabled: 'Only an in-app template can be stored. WhatsApp is not sent.',
+    },
+  },
+} as const;

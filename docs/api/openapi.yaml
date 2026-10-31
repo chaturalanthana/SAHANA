@@ -1,0 +1,207 @@
+openapi: 3.0.3
+info:
+  title: SAHANA API
+  version: 0.1.0
+  description: Milestone 0 foundation plus stored records for later modules. Society comes from the session. Welfare, loan, approval-threshold, and ESG formulas are not calculated.
+servers:
+  - url: /api/v1
+paths:
+  /health:
+    get:
+      summary: Process and database health
+      responses:
+        '200':
+          description: Database accepts a trivial query
+  /version:
+    get:
+      summary: Build version
+      responses:
+        '200':
+          description: Package or git version
+  /auth/login:
+    post:
+      summary: Sign in
+      parameters:
+        - $ref: '#/components/parameters/ClientHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, client]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+                client: { type: string, enum: [web, mobile] }
+                societyId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Web cookie set, or mobile tokens returned
+        '401':
+          description: Unknown email or password
+        '409':
+          description: More than one society membership; choices are returned
+        '429':
+          description: Login rate limit
+  /auth/refresh:
+    post:
+      summary: Rotate a mobile refresh token
+      responses:
+        '200':
+          description: New access and refresh tokens
+        '401':
+          description: Refresh token is unknown, expired, or already used
+  /auth/logout:
+    post:
+      summary: Revoke the current session
+      responses:
+        '204':
+          description: Signed out
+  /me:
+    get:
+      summary: Current user, society, and permissions
+      responses:
+        '200':
+          description: Session profile
+  /me/language:
+    post:
+      summary: Remember the user language
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [language]
+              properties:
+                language: { type: string, enum: [en, si, ta] }
+      responses:
+        '204':
+          description: Saved
+  /session/society:
+    post:
+      summary: Switch to another society the user belongs to
+      responses:
+        '200':
+          description: New session for the chosen society
+        '403':
+          description: The user is not a member
+  /config:
+    get:
+      summary: Active public configuration
+      description: Response keys are exactly the public allow-list.
+      responses:
+        '200':
+          description: Allow-listed settings
+  /config/{key}:
+    put:
+      summary: Submit a configuration change
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Non-critical change is active
+        '202':
+          description: Critical change is pending a second approver
+  /config/changes:
+    get:
+      summary: Pending configuration changes
+      responses:
+        '200':
+          description: Open proposals
+  /config/changes/{id}/approve:
+    post:
+      summary: Approve a pending change submitted by someone else
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Approved
+        '403':
+          description: Self-approval or missing permission
+  /consent:
+    get:
+      summary: Published consent documents
+      responses:
+        '200':
+          description: Empty until the society publishes text
+  /users:
+    get:
+      summary: Paginated society users
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Page of users. pageSize is clamped to 100.
+  /audit:
+    get:
+      summary: Paginated society audit events
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Page of audit events
+  /members:
+    get:
+      summary: Paginated members in the signed-in society
+    post:
+      summary: Record a member. Status and category codes are society text, not an approved list.
+  /members/{id}:
+    get:
+      summary: One member in the signed-in society. Another society receives not_found.
+  /members/{id}/status:
+    post:
+      summary: Append a status history row and set the current status code. Earlier rows stay.
+  /members/{id}/family:
+    post:
+      summary: Store a family profile and link it with a society-entered relationship code.
+  /claims:
+    post:
+      summary: Store a claim. Eligibility is always not_calculated.
+  /journal-documents/{id}/post:
+    post:
+      summary: Post a draft journal when debits equal credits. Posted lines cannot be edited.
+  /esg/results:
+    post:
+      summary: Refuses to calculate a verified ESG result while OD 05 is open.
+      responses:
+        '409':
+          description: not_calculated
+components:
+  parameters:
+    ClientHeader:
+      name: x-sahana-client
+      in: header
+      schema: { type: string, enum: [web, mobile] }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, default: 25 }
+  schemas:
+    Error:
+      type: object
+      required: [code, messageKey, traceId]
+      properties:
+        code: { type: string }
+        messageKey: { type: string }
+        traceId: { type: string }
+        fields:
+          type: array
+          items:
+            type: object
+            properties:
+              path: { type: string }
+              messageKey: { type: string }
