@@ -12,6 +12,8 @@ test('signs in and saves a society contact phone', async ({ page }) => {
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password ?? '');
   await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.locator('[data-language-menu]').click();
+  await page.locator('[data-locale="en"]').click();
   await expect(page.getByRole('heading', { name: 'Configuration' })).toBeVisible();
   await expect(page.getByLabel('Society name')).toHaveValue('Demo Society A');
 
@@ -27,4 +29,7 @@ test('signs in and saves a society contact phone', async ({ page }) => {
   await page.locator('[data-language-menu]').click();
   await page.locator('[data-locale="ta"]').click();
   await expect(page.getByRole('heading', { name: 'அமைப்பு' })).toBeVisible();
+  await page.locator('[data-language-menu]').click();
+  await page.locator('[data-locale="en"]').click();
+  await expect(page.getByRole('heading', { name: 'Configuration' })).toBeVisible();
 });

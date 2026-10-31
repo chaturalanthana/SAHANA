@@ -1,6 +1,6 @@
 # Requirements Traceability Matrix
 
-Status: foundation code is in progress as of 31 October 2026. No row is Done. GitHub Actions has not run, and the Definition of Done is not met.
+Status: milestone code through Milestone 6 is in the repository as of 31 October 2026. Automated API tests cover society isolation, configuration, member lifecycle, welfare eligibility, ledger posting and reversal, projects, emergency submission, and ESG counting. Rows stay **In progress** where the screen or report is only partial. **Blocked** remains where a production capacity or migration claim was not executed. Sinhala and Tamil catalogs are unreviewed drafts (OD 06). GitHub Actions evidence is the pull request workflow, not this note.
 Sources:
 
 - SRS: SAHANA Initial SRS v1.0, 31 October 2026. Clauses SRS 001–SRS 034. Open decisions OD 01–OD 08.

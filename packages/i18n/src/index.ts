@@ -25,9 +25,12 @@ const flat = {
 } as const;
 
 export function translate(locale: Locale, key: string): string {
-  const table = flat[locale];
-  const value = table[key as keyof typeof table];
+  const value = flat[locale][key as keyof (typeof flat)['en']];
   if (typeof value === 'string') return value;
+  if (locale !== 'en') {
+    const english = flat.en[key as keyof (typeof flat)['en']];
+    if (typeof english === 'string') return english;
+  }
   return key;
 }
 

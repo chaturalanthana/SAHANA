@@ -152,7 +152,7 @@ These commands were run on the developer machine. They are not a GitHub Actions 
 | `pnpm i18n:check` | Passed. 54 keys in English, Sinhala, and Tamil. Sinhala and Tamil remain unreviewed (OD 06). |
 | API foundation tests | 6 passed via `vitest run` against a disposable database named `sahana_test`. `pnpm --filter @sahana/api test` then failed at `prisma generate` because the running API process had the query-engine file open. |
 | `pnpm test:e2e` | 3 passed: desktop 1280×800, tablet 768×1024, phone 320×720. Each signed in, saved a contact phone, and showed the Sinhala and Tamil configuration headings. |
-| `pnpm --filter @sahana/api exec vitest run test/identity.test.ts test/foundation.test.ts` | 8 passed. TOTP confirm does not write the secret to the audit log. Language preference is returned by `/api/v1/me`. |
+| `pnpm i18n:check`, `pnpm lint`, `pnpm typecheck`, `pnpm --filter @sahana/api exec vitest run` | Passed on 31 October 2026. API tests: 20 passed. |
 | Mobile sign-in on a device | Not run. The shell persists language after login and shows the non-replacement sentence from the shared catalogs. |
 | Backup, MFA enforcement, 100,000-member load | Not run. |
 

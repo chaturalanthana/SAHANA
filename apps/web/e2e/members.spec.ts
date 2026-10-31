@@ -12,6 +12,8 @@ test('opens the member registry and keeps the formula notice visible', async ({ 
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password ?? '');
   await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.locator('[data-language-menu]').click();
+  await page.locator('[data-locale="en"]').click();
   await expect(page.getByRole('heading', { name: 'Configuration' })).toBeVisible();
   const menu = page.getByRole('button', { name: 'Menu' });
   if (await menu.isVisible()) await menu.click();
