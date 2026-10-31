@@ -20,7 +20,7 @@ Updating this file is part of the Definition of Done. Do not mark a row **Done**
 
 | Clause | Requirement | Module | Milestone | Status | Blocking decision |
 |---|---|---|---|---|---|
-| SRS 001 | MVP baseline; examples are not formulas | program | 0–6 | Planned | OD 08 confirms sequence |
+| SRS 001 | MVP baseline; examples are not formulas | program | 0–6 | In progress | OD 08 confirms sequence |
 | SRS 002 | Society scope; no unapproved cross-society access | tenancy | 0 | In progress | OD 01 for shared member identity |
 | SRS 003 | A user may hold several roles; each action uses assigned permissions | identity | 0 | In progress | Employer or HR access remains inside OD 01. Family logins closed for MVP by CD-07 |
 | SRS 004 | English, Sinhala, Tamil across UI, validation, help, content, notifications, reports | i18n | 0, then every slice | In progress | OD 06 for ownership, review, and fallback language |
@@ -37,7 +37,7 @@ Updating this file is part of the Definition of Done. Do not mark a row **Done**
 | SRS 015 | Mobile emergency request; short form; optional permissioned location | emergency, mobile | 5 | In progress | Location retention detail is inside the SRS 016 agreement (OD 04) |
 | SRS 016 | Coordinator inbox, alerts, escalation, closure, link to expenses | emergency | 5 | In progress | OD 04 targets; OD 06 SMS and push providers |
 | SRS 017 | Loan lifecycle. No interest method is assumed | loans | 3 | In progress | OD 03 |
-| SRS 018 | Full double-entry accounting, funds, periods, reconciliation, controlled reversal | ledger | 3 | In progress | OD 03 for chart of accounts, fund rules, opening balances |
+| SRS 018 | Full double-entry accounting, funds, periods, reconciliation, controlled reversal | ledger | 3 | In progress | Statements, bank match, budgets, and asset records are in the API. Full close-of-period workflow is still partial |
 | SRS 019 | Configurable approvals, separation of duties, audited emergency fast-track | approvals | 2 | In progress | OD 04 for the actual routes and thresholds |
 | SRS 020 | Approved, payable, and paid are distinct; integrations are optional | ledger | 3 | In progress | Payment gateway, bank, payroll, and HR integrations unconfirmed (OD 07). Payroll engine excluded by CD-12 |
 | SRS 021 | Projects and events, participation, expenses, evidence, outcomes | projects | 4 | In progress | — |
@@ -46,14 +46,14 @@ Updating this file is part of the Definition of Done. Do not mark a row **Done**
 | SRS 024 | ESG goal configuration | esg | 5 | In progress | OD 05 for definitions and baselines |
 | SRS 025 | Automatic KPIs from verified sources only | esg | 5 | In progress | OD 05 |
 | SRS 026 | Evidence, traceability, double-counting control, history on correction | esg | 5 | In progress | OD 05 |
-| SRS 027 | Role-controlled reports, exports, and legacy migration with reconciliation | reporting | 6, import in 1 and 3 | Blocked for production migration | OD 08 sources and quality; OD 03 opening balances |
+| SRS 027 | Role-controlled reports, exports, and legacy migration with reconciliation | reporting | 6, import in 1 and 3 | In progress for statements; Blocked for production migration | No legacy source (OD 08). Income, balance sheet, cash flow, member and fund ledgers are API reports |
 | SRS 028 | Central configuration applied across web, mobile, and API | config | 0 | In progress | — |
 | SRS 029 | Validated, versioned, audited settings; extra approval for critical settings; consent versions | config | 0 | In progress | Which settings are critical is confirmed with the sponsor during Milestone 0 |
 | SRS 030 | Secrets stay out of settings, responses, exports, and logs | config, security | 0 | In progress | — |
 | SRS 031 | API RBAC, isolation, protection in transit and at rest, audit. MFA, retention, backup agreed before launch | identity, security | 0; launch bar in 6 | In progress | OD 07 and OD 06 for MFA factor, retention, backup objectives |
 | SRS 032 | Agreed PERN architecture; detailed schema and contracts come later | platform | 0 | In progress | TD-01–TD-05 |
 | SRS 033 | Design for 100,000 members; test a representative dataset; capacity is not a latency guarantee | platform | 6 | Blocked for the pass claim | OD 07 concurrency and response-time targets |
-| SRS 034 | End-to-end acceptance in three languages on web and mobile; change control after baseline | program | 6 | Planned | OD 08 acceptance owners |
+| SRS 034 | End-to-end acceptance in three languages on web and mobile; change control after baseline | program | 6 | In progress | UAT script exists and has not been signed |
 
 ## Master-prompt modules
 

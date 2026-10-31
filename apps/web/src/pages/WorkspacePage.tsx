@@ -112,15 +112,19 @@ export function WorkspacePage({ sectionKey }: { sectionKey: string }) {
   const { t } = useI18n();
   const session = useSession();
   const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const canWrite = section?.permission ? (session.me?.permissions.includes(section.permission) ?? false) : false;
 
   const list = useQuery({
-    queryKey: [section?.listPath],
+    queryKey: [section?.listPath, page],
     enabled: Boolean(section),
-    queryFn: () => client.request<{ items: Record<string, unknown>[]; total?: number }>(section?.listPath ?? ''),
+    queryFn: () =>
+      client.request<{ items: Record<string, unknown>[]; total?: number; pageSize?: number }>(
+        `${section?.listPath ?? ''}?page=${page}&pageSize=25`,
+      ),
   });
   const save = useMutation({
     mutationFn: () => {
@@ -191,6 +195,19 @@ export function WorkspacePage({ sectionKey }: { sectionKey: string }) {
               ),
           }))}
         />
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button type="button" variant="secondary" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>
+            {t('common.action.previous')}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={(list.data?.items.length ?? 0) < 25}
+            onClick={() => setPage((current) => current + 1)}
+          >
+            {t('common.action.next')}
+          </Button>
+        </div>
       </Card>
       <Toast message={message} />
     </div>

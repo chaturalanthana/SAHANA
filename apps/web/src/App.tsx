@@ -5,6 +5,7 @@ import { SessionProvider, useSession } from './session';
 import { Shell } from './shell/Shell';
 import { ConfigPage } from './pages/ConfigPage';
 import { MemberPage } from './pages/MemberPage';
+import { FinancePage } from './pages/FinancePage';
 import { WorkspacePage } from './pages/WorkspacePage';
 import { LoginPage } from './pages/LoginPage';
 import { useI18n } from './i18n';
@@ -46,7 +47,7 @@ function Protected() {
         <Route path="/members/:id" element={<MemberPage />} />
         <Route path="/governance" element={<WorkspacePage sectionKey="governance" />} />
         <Route path="/welfare" element={<WorkspacePage sectionKey="welfare" />} />
-        <Route path="/ledger" element={<WorkspacePage sectionKey="ledger" />} />
+        <Route path="/ledger" element={<FinancePage />} />
         <Route path="/loans" element={<WorkspacePage sectionKey="loans" />} />
         <Route path="/projects" element={<WorkspacePage sectionKey="projects" />} />
         <Route path="/emergency" element={<WorkspacePage sectionKey="emergency" />} />

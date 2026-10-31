@@ -22,6 +22,22 @@ import {
 import { getChanges, getConfig, getConsent, postApprove, putConfig } from './modules/config/config.routes';
 import { getAudit, getUsers } from './modules/directory/directory.routes';
 import {
+  getAssets,
+  getBudget,
+  getFundLedger,
+  getFunds,
+  getMemberLedger,
+  getReconciliation,
+  getStatements,
+  postAsset,
+  postBank,
+  postBudget,
+  postFund,
+  postInvestment,
+  postMatch,
+  postStatement,
+} from './modules/finance/finance.routes';
+import {
   getAccounts,
   getClaim,
   getClaims,
@@ -41,6 +57,7 @@ import {
   getMemberProfile,
   getMemberProjects,
   getMembers,
+  getMyChannel,
   getMyMember,
   getProjects,
   getRoutes,
@@ -162,6 +179,7 @@ export function createApp() {
   app.post('/api/v1/members', requireAuth, safe(postMember));
   app.post('/api/v1/members/import', requireAuth, safe(postMemberImport));
   app.get('/api/v1/members/me', requireAuth, safe(getMyMember));
+  app.get('/api/v1/me/home', requireAuth, safe(getMyChannel));
   app.get('/api/v1/members/:id', requireAuth, safe(getMemberProfile));
   app.get('/api/v1/members/:id/history', requireAuth, safe(getMemberHistory));
   app.post('/api/v1/members/:id/status', requireAuth, safe(postMemberStatus));
@@ -196,6 +214,20 @@ export function createApp() {
   app.post('/api/v1/accounts', requireAuth, safe(postAccount));
   app.post('/api/v1/ledger/chart', requireAuth, safe(postChart));
   app.get('/api/v1/reports/trial-balance', requireAuth, safe(getTrialBalance));
+  app.get('/api/v1/reports/statements', requireAuth, safe(getStatements));
+  app.get('/api/v1/funds', requireAuth, safe(getFunds));
+  app.post('/api/v1/funds', requireAuth, safe(postFund));
+  app.get('/api/v1/funds/:id/ledger', requireAuth, safe(getFundLedger));
+  app.get('/api/v1/members/:id/ledger', requireAuth, safe(getMemberLedger));
+  app.post('/api/v1/bank-accounts', requireAuth, safe(postBank));
+  app.post('/api/v1/bank-statement-lines', requireAuth, safe(postStatement));
+  app.post('/api/v1/bank-statement-lines/:id/match', requireAuth, safe(postMatch));
+  app.get('/api/v1/bank-accounts/:id/reconciliation', requireAuth, safe(getReconciliation));
+  app.post('/api/v1/budgets', requireAuth, safe(postBudget));
+  app.get('/api/v1/budgets/:id', requireAuth, safe(getBudget));
+  app.get('/api/v1/assets', requireAuth, safe(getAssets));
+  app.post('/api/v1/assets', requireAuth, safe(postAsset));
+  app.post('/api/v1/investments', requireAuth, safe(postInvestment));
   app.post('/api/v1/fiscal-periods', requireAuth, safe(postPeriod));
   app.get('/api/v1/journal-documents', requireAuth, safe(getJournals));
   app.post('/api/v1/journal-documents', requireAuth, safe(postJournalDocument));

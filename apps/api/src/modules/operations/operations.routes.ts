@@ -46,6 +46,7 @@ import {
   memberFamily,
   memberHistory,
   memberSection,
+  myChannel,
   myMember,
   postJournal,
   recordEsgResult,
@@ -134,6 +135,14 @@ export function postMemberImport(req: Request, res: Response, next: NextFunction
     () => importMembers(allow(req, 'members.write'), { trial: body.trial ?? false, rows: body.rows }, req.traceId),
     200,
   );
+}
+
+export function getMyChannel(req: Request, res: Response, next: NextFunction): void {
+  if (!req.actor) {
+    next(new ApiError(401, 'unauthorized', 'errors.unauthorized'));
+    return;
+  }
+  void send(res, next, () => myChannel({ societyId: req.actor!.societyId, userId: req.actor!.userId }));
 }
 
 export function getMyMember(req: Request, res: Response, next: NextFunction): void {
@@ -373,7 +382,15 @@ export function postJournalDocument(req: Request, res: Response, next: NextFunct
 }
 
 export function postJournalLine(req: Request, res: Response, next: NextFunction): void {
-  const body = z.object({ accountId: z.string().uuid(), debit: money.optional(), credit: money.optional(), fundId: z.string().uuid().optional() }).parse(req.body);
+  const body = z
+    .object({
+      accountId: z.string().uuid(),
+      debit: money.optional(),
+      credit: money.optional(),
+      fundId: z.string().uuid().optional(),
+      memberId: z.string().uuid().optional(),
+    })
+    .parse(req.body);
   void send(res, next, () => addJournalLine(allow(req, 'ledger.post'), String(req.params.id), body, req.traceId), 201);
 }
 

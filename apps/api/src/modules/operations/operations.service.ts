@@ -124,6 +124,29 @@ export async function createMember(
   });
 }
 
+export async function myChannel(scope: Scope) {
+  return withSociety(scope, async (tx) => {
+    const member = await tx.member.findFirst({ where: { societyId: scope.societyId, userId: scope.userId } });
+    if (!member) return { member: null, claims: [], emergencies: [], family: [] };
+    const [claims, emergencies, family] = await Promise.all([
+      tx.claim.findMany({ where: { societyId: scope.societyId, memberId: member.id }, orderBy: { createdAt: 'desc' }, take: 25 }),
+      tx.emergencyRequest.findMany({
+        where: { societyId: scope.societyId, memberId: member.id },
+        orderBy: { createdAt: 'desc' },
+        take: 25,
+        select: { id: true, requestType: true, status: true, phone: true, createdAt: true },
+      }),
+      tx.memberFamilyLink.findMany({ where: { societyId: scope.societyId, memberId: member.id }, take: 25 }),
+    ]);
+    return {
+      member: row(member),
+      claims: claims.map((item) => row(item)),
+      emergencies: emergencies.map((item) => row(item)),
+      family: family.map((item) => ({ id: item.id, relationshipCode: item.relationshipCode })),
+    };
+  });
+}
+
 export async function myMember(scope: Scope) {
   return withSociety(scope, async (tx) => {
     const member = await tx.member.findFirst({ where: { societyId: scope.societyId, userId: scope.userId } });
@@ -633,7 +656,7 @@ export async function createJournal(scope: Scope, input: { periodId: string; rea
 export async function addJournalLine(
   scope: Scope,
   documentId: string,
-  input: { accountId: string; debit?: string; credit?: string; fundId?: string },
+  input: { accountId: string; debit?: string; credit?: string; fundId?: string; memberId?: string },
   traceId: string,
 ) {
   return withSociety(scope, async (tx) => {
@@ -646,6 +669,7 @@ export async function addJournalLine(
         documentId,
         accountId: input.accountId,
         fundId: input.fundId,
+        memberId: input.memberId,
         debit: new Prisma.Decimal(input.debit ?? '0'),
         credit: new Prisma.Decimal(input.credit ?? '0'),
       },
@@ -758,7 +782,14 @@ export async function seedChart(scope: Scope, traceId: string) {
       const existing = await tx.account.findFirst({ where: { societyId: scope.societyId, code } });
       if (existing) continue;
       const account = await tx.account.create({
-        data: { societyId: scope.societyId, code, name, accountType, createdBy: scope.userId },
+        data: {
+          societyId: scope.societyId,
+          code,
+          name,
+          accountType,
+          isCash: code === '1000' || code === '1100',
+          createdBy: scope.userId,
+        },
       });
       created.push(account.id);
     }

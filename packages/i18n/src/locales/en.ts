@@ -16,6 +16,8 @@ export const en = {
       retry: 'Retry',
       approve: 'Approve',
       close: 'Close',
+      previous: 'Previous',
+      next: 'Next',
     },
     state: {
       loading: 'Loading',
@@ -42,6 +44,8 @@ export const en = {
       expand: 'Expand menu',
       config: 'Configuration',
       home: 'Home',
+      requests: 'Requests',
+      profile: 'Profile',
     },
     user: {
       menu: 'Account',
@@ -170,7 +174,21 @@ export const en = {
     },
     esg: {
       title: 'ESG',
-      hint: 'Goals can be stored. Verified results are not calculated.',
+      hint: 'Goals can be stored. A verified result counts only checked sources.',
+    },
+    finance: {
+      statements: 'Financial statements',
+      surplus: 'Surplus',
+      cashFlow: 'Cash movement',
+      balanced: 'The balance sheet balances',
+      unbalanced: 'The balance sheet does not balance',
+      bank: 'Bank reconciliation',
+      unmatched: 'Unmatched statement lines',
+      budget: 'Budget compared with posted amounts',
+      asset: 'Assets',
+      depreciation: 'Annual depreciation is shown only when a useful life is stored. It is not posted by itself.',
+      investment: 'Investments are stored at cost. This is not a market value.',
+      funds: 'Funds',
     },
     member: {
       history: 'Status history',

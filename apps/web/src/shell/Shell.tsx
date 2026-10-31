@@ -7,15 +7,15 @@ import { useI18n } from '../i18n';
 import { client, useSession } from '../session';
 
 const destinations = [
-  ['/config', 'shell.nav.config'],
-  ['/members', 'modules.nav.members'],
-  ['/governance', 'modules.nav.governance'],
-  ['/welfare', 'modules.nav.welfare'],
-  ['/ledger', 'modules.nav.ledger'],
-  ['/loans', 'modules.nav.loans'],
-  ['/projects', 'modules.nav.projects'],
-  ['/emergency', 'modules.nav.emergency'],
-  ['/esg', 'modules.nav.esg'],
+  ['/config', 'shell.nav.config', 'config.read'],
+  ['/members', 'modules.nav.members', 'members.read'],
+  ['/governance', 'modules.nav.governance', 'governance.read'],
+  ['/welfare', 'modules.nav.welfare', 'welfare.read'],
+  ['/ledger', 'modules.nav.ledger', 'ledger.read'],
+  ['/loans', 'modules.nav.loans', 'loans.read'],
+  ['/projects', 'modules.nav.projects', 'projects.read'],
+  ['/emergency', 'modules.nav.emergency', 'emergency.read'],
+  ['/esg', 'modules.nav.esg', 'esg.read'],
 ] as const;
 
 export function Shell({ children }: { children: ReactNode }) {
@@ -73,7 +73,9 @@ export function Shell({ children }: { children: ReactNode }) {
             </div>
           </div>
           <nav className="px-2 pb-6" aria-label={t('shell.nav.menu')}>
-            {destinations.map(([to, key]) => (
+            {destinations
+              .filter(([, , permission]) => session.me?.permissions.includes(permission) || (permission === 'emergency.read' && session.me?.permissions.includes('emergency.coordinate')))
+              .map(([to, key]) => (
               <NavLink
                 key={to}
                 to={to}

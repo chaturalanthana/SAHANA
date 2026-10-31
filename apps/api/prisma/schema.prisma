@@ -467,6 +467,7 @@ model Account {
   code        String
   name        String
   accountType String   @map("account_type")
+  isCash      Boolean  @default(false) @map("is_cash")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   createdBy   String   @map("created_by") @db.Uuid
 
@@ -522,11 +523,80 @@ model JournalLine {
   documentId String  @map("document_id") @db.Uuid
   accountId  String  @map("account_id") @db.Uuid
   fundId     String? @map("fund_id") @db.Uuid
+  memberId   String? @map("member_id") @db.Uuid
   debit      Decimal @default(0) @db.Decimal(19, 4)
   credit     Decimal @default(0) @db.Decimal(19, 4)
 
   @@index([societyId, documentId])
   @@map("journal_lines")
+}
+
+model BankAccount {
+  id        String   @id @default(uuid()) @db.Uuid
+  societyId String   @map("society_id") @db.Uuid
+  name      String
+  accountId String   @map("account_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String   @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("bank_accounts")
+}
+
+model BankStatementLine {
+  id            String    @id @default(uuid()) @db.Uuid
+  societyId     String    @map("society_id") @db.Uuid
+  bankAccountId String    @map("bank_account_id") @db.Uuid
+  bookedOn      DateTime  @map("booked_on") @db.Date
+  amount        Decimal   @db.Decimal(19, 4)
+  description   String
+  journalLineId String?   @unique @map("journal_line_id") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy     String    @map("created_by") @db.Uuid
+
+  @@index([societyId, bankAccountId])
+  @@map("bank_statement_lines")
+}
+
+model Budget {
+  id        String   @id @default(uuid()) @db.Uuid
+  societyId String   @map("society_id") @db.Uuid
+  name      String
+  accountId String   @map("account_id") @db.Uuid
+  periodId  String   @map("period_id") @db.Uuid
+  amount    Decimal  @db.Decimal(19, 4)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String   @map("created_by") @db.Uuid
+
+  @@index([societyId, periodId])
+  @@map("budgets")
+}
+
+model FixedAsset {
+  id               String   @id @default(uuid()) @db.Uuid
+  societyId        String   @map("society_id") @db.Uuid
+  name             String
+  cost             Decimal  @db.Decimal(19, 4)
+  acquiredOn       DateTime @map("acquired_on") @db.Date
+  usefulLifeYears  Int?     @map("useful_life_years")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy        String   @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("fixed_assets")
+}
+
+model Investment {
+  id         String   @id @default(uuid()) @db.Uuid
+  societyId  String   @map("society_id") @db.Uuid
+  name       String
+  cost       Decimal  @db.Decimal(19, 4)
+  acquiredOn DateTime @map("acquired_on") @db.Date
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy  String   @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("investments")
 }
 
 model LoanProduct {

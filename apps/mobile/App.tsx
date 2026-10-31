@@ -30,6 +30,12 @@ export default function App() {
   const [categoryCode, setCategoryCode] = useState('');
   const [memberId, setMemberId] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [tab, setTab] = useState<'home' | 'requests' | 'profile'>('home');
+  const [home, setHome] = useState<{
+    member: { memberNo?: string; givenName?: string; familyName?: string; statusCode?: string } | null;
+    claims: { id: string; status?: string; eligibilityStatus?: string }[];
+    emergencies: { id: string; requestType?: string; status?: string }[];
+  } | null>(null);
   const [idempotencyKey] = useState(() => `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`);
   const t = (key: string) => translate(locale, key);
 
@@ -54,6 +60,19 @@ export default function App() {
       setAccessToken(result.accessToken);
       setDisplayName(result.user.displayName);
       setSocietyName(result.society.name);
+      const authed = createApiClient({
+        baseUrl: apiUrl,
+        getAccessToken: () => result.accessToken ?? null,
+      });
+      void authed
+        .request<NonNullable<typeof home>>('/api/v1/me/home')
+        .then((channel) => {
+          setHome(channel);
+          if (channel.member && typeof channel.member === 'object' && 'id' in channel.member) {
+            setMemberId(String((channel.member as { id: string }).id));
+          }
+        })
+        .catch(() => setHome(null));
       if (isLocale(result.user.preferredLanguage)) setLocale(result.user.preferredLanguage);
       else {
         try {
@@ -166,12 +185,50 @@ export default function App() {
           <View style={{ gap: space[4] }}>
             <Text style={{ fontSize: fontSize.body, color: color.text }}>{displayName}</Text>
             {societyName ? <Text style={{ color: color.body, fontSize: fontSize.dense }}>{societyName}</Text> : null}
+            <View style={{ flexDirection: 'row', gap: space[3] }}>
+              {(['home', 'requests', 'profile'] as const).map((item) => (
+                <Text
+                  key={item}
+                  accessibilityRole="button"
+                  onPress={() => setTab(item)}
+                  style={{ color: tab === item ? color.primaryInk : color.body, fontSize: fontSize.dense, paddingVertical: space[2] }}
+                >
+                  {t(item === 'home' ? 'shell.nav.home' : item === 'requests' ? 'shell.nav.requests' : 'shell.nav.profile')}
+                </Text>
+              ))}
+            </View>
             <Text style={{ color: color.text, fontSize: fontSize.dense, lineHeight: fontSize.dense * lineHeight.body }}>
               {t('shell.emergency.notASubstitute')}
             </Text>
-            {submitted ? (
-              <Text style={{ color: color.success, fontSize: fontSize.body }}>{t('modules.saved')}</Text>
-            ) : (
+            {tab === 'profile' ? (
+              <View style={{ gap: space[2] }}>
+                <Text style={{ color: color.text, fontSize: fontSize.body }}>
+                  {home?.member?.givenName ?? ''} {home?.member?.familyName ?? ''}
+                </Text>
+                <Text style={{ color: color.body }}>{home?.member?.memberNo ?? t('common.state.empty')}</Text>
+                <Text style={{ color: color.body }}>{home?.member?.statusCode ?? ''}</Text>
+              </View>
+            ) : null}
+            {tab === 'requests' ? (
+              <View style={{ gap: space[2] }}>
+                {(home?.emergencies ?? []).map((item) => (
+                  <Text key={item.id} style={{ color: color.text }}>
+                    {item.requestType} · {item.status}
+                  </Text>
+                ))}
+                {(home?.claims ?? []).map((item) => (
+                  <Text key={item.id} style={{ color: color.text }}>
+                    {item.status} · {item.eligibilityStatus}
+                  </Text>
+                ))}
+                {(home?.emergencies.length ?? 0) + (home?.claims.length ?? 0) === 0 ? (
+                  <Text style={{ color: color.body }}>{t('common.state.empty')}</Text>
+                ) : null}
+              </View>
+            ) : null}
+            {tab === 'home' && submitted ? (
+              <Text style={{ color: color.successInk, fontSize: fontSize.body }}>{t('modules.saved')}</Text>
+            ) : tab === 'home' ? (
               <View style={{ gap: space[3] }}>
                 <Text style={{ color: color.text, fontWeight: '700', fontSize: fontSize.body }}>{t('shell.emergency.title')}</Text>
                 {memberId ? null : (
@@ -189,7 +246,7 @@ export default function App() {
                 {error ? <Text style={{ color: color.dangerInk }}>{error}</Text> : null}
                 <Button label={t('common.action.save')} loading={pending} onPress={() => void submitEmergency()} />
               </View>
-            )}
+            ) : null}
             <Button label={t('common.action.signOut')} onPress={() => void signOut()} />
           </View>
         ) : (
