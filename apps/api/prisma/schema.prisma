@@ -364,10 +364,11 @@ model WelfareSchemeVersion {
   id            String   @id @default(uuid()) @db.Uuid
   societyId     String   @map("society_id") @db.Uuid
   schemeId      String   @map("scheme_id") @db.Uuid
-  versionNo     Int      @map("version_no")
-  ruleBody      Json     @default("{}") @map("rule_body")
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  createdBy     String   @map("created_by") @db.Uuid
+  versionNo     Int       @map("version_no")
+  ruleBody      Json      @default("{}") @map("rule_body")
+  publishedAt   DateTime? @map("published_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy     String    @map("created_by") @db.Uuid
 
   @@unique([schemeId, versionNo])
   @@index([societyId])
@@ -382,6 +383,9 @@ model Claim {
   schemeVersionId   String   @map("scheme_version_id") @db.Uuid
   idempotencyKey    String   @map("idempotency_key")
   eligibilityStatus String   @default("not_calculated") @map("eligibility_status")
+  eligibilityReason String   @default("") @map("eligibility_reason")
+  evidenceNote      String   @default("") @map("evidence_note")
+  amount            Decimal? @db.Decimal(19, 4)
   status            String   @default("submitted")
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   createdBy         String   @map("created_by") @db.Uuid
@@ -407,8 +411,9 @@ model ClaimEvent {
 model ApprovalRoute {
   id           String   @id @default(uuid()) @db.Uuid
   societyId    String   @map("society_id") @db.Uuid
-  name         String
-  policyStatus String   @default("stored_not_in_force") @map("policy_status")
+  name              String
+  policyStatus      String  @default("in_force") @map("policy_status")
+  allowSelfApproval Boolean @default(false) @map("allow_self_approval")
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   createdBy    String   @map("created_by") @db.Uuid
 
@@ -691,6 +696,22 @@ model EsgKpiDefinition {
 
   @@index([societyId, goalId])
   @@map("esg_kpi_definitions")
+}
+
+model NotificationDelivery {
+  id         String   @id @default(uuid()) @db.Uuid
+  societyId  String   @map("society_id") @db.Uuid
+  memberId   String?  @map("member_id") @db.Uuid
+  channel    String
+  status     String
+  messageKey String   @map("message_key")
+  objectType String   @map("object_type")
+  objectId   String   @map("object_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy  String   @map("created_by") @db.Uuid
+
+  @@index([societyId, createdAt])
+  @@map("notification_deliveries")
 }
 
 model NotificationTemplate {

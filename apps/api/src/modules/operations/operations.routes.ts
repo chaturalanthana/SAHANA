@@ -13,6 +13,7 @@ import {
   createApprovalRoute,
   createApprovalStage,
   createClaim,
+  listClaimEvents,
   createAppointment,
   createEmergency,
   createGovernanceDocument,
@@ -258,7 +259,18 @@ export function postScheme(req: Request, res: Response, next: NextFunction): voi
 }
 
 export function postSchemeVersion(req: Request, res: Response, next: NextFunction): void {
-  void send(res, next, () => createSchemeVersion(allow(req, 'welfare.write'), String(req.params.id), req.traceId), 201);
+  const body = z
+    .object({
+      publish: z.boolean().optional(),
+      ruleBody: z.record(z.unknown()).optional(),
+    })
+    .parse(req.body ?? {});
+  void send(
+    res,
+    next,
+    () => createSchemeVersion(allow(req, 'welfare.write'), String(req.params.id), req.traceId, body),
+    201,
+  );
 }
 
 export function getClaims(req: Request, res: Response, next: NextFunction): void {
@@ -270,6 +282,10 @@ export function getClaims(req: Request, res: Response, next: NextFunction): void
   );
 }
 
+export function getClaim(req: Request, res: Response, next: NextFunction): void {
+  void send(res, next, () => listClaimEvents(allow(req, 'welfare.read'), String(req.params.id)));
+}
+
 export function postClaim(req: Request, res: Response, next: NextFunction): void {
   const body = z
     .object({
@@ -277,6 +293,10 @@ export function postClaim(req: Request, res: Response, next: NextFunction): void
       schemeVersionId: z.string().uuid(),
       idempotencyKey: text,
       familyMemberId: z.string().uuid().optional(),
+      amount: money.optional(),
+      evidenceNote: z.string().max(2000).optional(),
+      documents: z.array(z.string().max(80)).max(20).optional(),
+      contributionSatisfied: z.boolean().optional(),
     })
     .parse(req.body);
   void send(res, next, () => createClaim(allow(req, 'welfare.write'), body, req.traceId), 201);

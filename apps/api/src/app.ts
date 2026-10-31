@@ -23,6 +23,7 @@ import { getChanges, getConfig, getConsent, postApprove, putConfig } from './mod
 import { getAudit, getUsers } from './modules/directory/directory.routes';
 import {
   getAccounts,
+  getClaim,
   getClaims,
   getCommittees,
   getEmergency,
@@ -176,6 +177,7 @@ export function createApp() {
   app.post('/api/v1/welfare-schemes', requireAuth, safe(postScheme));
   app.post('/api/v1/welfare-schemes/:id/versions', requireAuth, safe(postSchemeVersion));
   app.get('/api/v1/claims', requireAuth, safe(getClaims));
+  app.get('/api/v1/claims/:id', requireAuth, safe(getClaim));
   app.post('/api/v1/claims', requireAuth, safe(postClaim));
   app.get('/api/v1/approval-routes', requireAuth, safe(getRoutes));
   app.post('/api/v1/approval-routes', requireAuth, safe(postRoute));

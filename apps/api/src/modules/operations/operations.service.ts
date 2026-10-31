@@ -7,6 +7,7 @@ import {
   knownCode,
   memberStatusAllowed,
 } from '../../domain/members';
+import { DEFAULT_WELFARE_RULE, evaluateWelfare, parseWelfareRule } from '../../domain/welfare';
 import { ApiError } from '../../errors';
 
 function present(value: unknown): unknown {
@@ -383,17 +384,25 @@ export async function createNamed(
   });
 }
 
-export async function createSchemeVersion(scope: Scope, schemeId: string, traceId: string) {
+export async function createSchemeVersion(
+  scope: Scope,
+  schemeId: string,
+  traceId: string,
+  input?: { publish?: boolean; ruleBody?: unknown },
+) {
   return withSociety(scope, async (tx) => {
     const scheme = await tx.welfareScheme.findFirst({ where: { id: schemeId, societyId: scope.societyId } });
     if (!scheme) throw new ApiError(404, 'not_found', 'errors.notFound');
     const count = await tx.welfareSchemeVersion.count({ where: { schemeId } });
+    const publish = input?.publish === true;
+    const ruleBody = publish ? (parseWelfareRule(input?.ruleBody) ?? DEFAULT_WELFARE_RULE) : {};
     const created = await tx.welfareSchemeVersion.create({
       data: {
         societyId: scope.societyId,
         schemeId,
         versionNo: count + 1,
-        ruleBody: {},
+        ruleBody,
+        publishedAt: publish ? new Date() : null,
         createdBy: scope.userId,
       },
     });
@@ -404,7 +413,16 @@ export async function createSchemeVersion(scope: Scope, schemeId: string, traceI
 
 export async function createClaim(
   scope: Scope,
-  input: { memberId: string; schemeVersionId: string; idempotencyKey: string; familyMemberId?: string },
+  input: {
+    memberId: string;
+    schemeVersionId: string;
+    idempotencyKey: string;
+    familyMemberId?: string;
+    amount?: string;
+    evidenceNote?: string;
+    documents?: string[];
+    contributionSatisfied?: boolean;
+  },
   traceId: string,
 ) {
   return withSociety(scope, async (tx) => {
@@ -417,6 +435,40 @@ export async function createClaim(
     });
     const member = await tx.member.findFirst({ where: { id: input.memberId, societyId: scope.societyId } });
     if (!version || !member) throw new ApiError(404, 'not_found', 'errors.notFound');
+    let relationship: string | null = null;
+    if (input.familyMemberId) {
+      const link = await tx.memberFamilyLink.findFirst({
+        where: { societyId: scope.societyId, memberId: input.memberId, familyMemberId: input.familyMemberId },
+      });
+      if (!link) throw new ApiError(404, 'not_found', 'errors.notFound');
+      relationship = link.relationshipCode;
+    }
+    const rule = version.publishedAt ? parseWelfareRule(version.ruleBody) : null;
+    let eligibilityStatus = 'not_calculated';
+    let eligibilityReason = '';
+    if (rule) {
+      const priorClaims = await tx.claim.count({
+        where: {
+          societyId: scope.societyId,
+          memberId: input.memberId,
+          schemeVersionId: version.id,
+          eligibilityStatus: 'eligible',
+        },
+      });
+      const decision = evaluateWelfare({
+        rule,
+        memberStatus: member.statusCode,
+        memberSince: member.createdAt,
+        asOf: new Date(),
+        relationship,
+        amount: input.amount ?? null,
+        documents: input.documents ?? [],
+        priorClaims,
+        contributionSatisfied: input.contributionSatisfied ?? !rule.contributionRequired,
+      });
+      eligibilityStatus = decision.status;
+      eligibilityReason = decision.reason;
+    }
     const created = await tx.claim.create({
       data: {
         societyId: scope.societyId,
@@ -424,7 +476,22 @@ export async function createClaim(
         familyMemberId: input.familyMemberId,
         schemeVersionId: input.schemeVersionId,
         idempotencyKey: input.idempotencyKey,
-        eligibilityStatus: 'not_calculated',
+        eligibilityStatus,
+        eligibilityReason,
+        evidenceNote: input.evidenceNote ?? '',
+        amount: input.amount ?? null,
+        createdBy: scope.userId,
+      },
+    });
+    await tx.notificationDelivery.create({
+      data: {
+        societyId: scope.societyId,
+        memberId: input.memberId,
+        channel: 'in_app',
+        status: 'delivered',
+        messageKey: 'modules.welfare.hint',
+        objectType: 'claim',
+        objectId: created.id,
         createdBy: scope.userId,
       },
     });
@@ -441,10 +508,26 @@ export async function createClaim(
   });
 }
 
+export async function listClaimEvents(scope: Scope, claimId: string) {
+  return withSociety(scope, async (tx) => {
+    const claim = await tx.claim.findFirst({ where: { id: claimId, societyId: scope.societyId } });
+    if (!claim) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const events = await tx.claimEvent.findMany({ where: { societyId: scope.societyId, claimId }, orderBy: { createdAt: 'asc' } });
+    const requests = await tx.approvalRequest.findMany({
+      where: { societyId: scope.societyId, objectType: 'claim', objectId: claimId },
+    });
+    const decisions = await tx.approvalDecision.findMany({
+      where: { societyId: scope.societyId, requestId: { in: requests.map((item) => item.id) } },
+      orderBy: { createdAt: 'asc' },
+    });
+    return { claim: row(claim), events: events.map((item) => row(item)), decisions: decisions.map((item) => row(item)) };
+  });
+}
+
 export async function createApprovalRoute(scope: Scope, name: string, traceId: string) {
   return withSociety(scope, async (tx) => {
     const created = await tx.approvalRoute.create({
-      data: { societyId: scope.societyId, name, policyStatus: 'stored_not_in_force', createdBy: scope.userId },
+      data: { societyId: scope.societyId, name, policyStatus: 'in_force', allowSelfApproval: false, createdBy: scope.userId },
     });
     await audit(tx, scope, 'approvals.route_stored', 'approval_route', created.id, traceId);
     return row(created);
@@ -477,10 +560,22 @@ export async function createApprovalDecision(
   return withSociety(scope, async (tx) => {
     const request = await tx.approvalRequest.findFirst({ where: { id: requestId, societyId: scope.societyId } });
     if (!request) throw new ApiError(404, 'not_found', 'errors.notFound');
-    if (request.createdBy === scope.userId) throw new ApiError(403, 'self_approval', 'config.critical.selfApproval');
+    if (request.createdBy === scope.userId) {
+      const route = request.routeId
+        ? await tx.approvalRoute.findFirst({ where: { id: request.routeId, societyId: scope.societyId } })
+        : null;
+      if (!route?.allowSelfApproval) throw new ApiError(403, 'self_approval', 'config.critical.selfApproval');
+    }
     const created = await tx.approvalDecision.create({
       data: { societyId: scope.societyId, requestId, ...input, createdBy: scope.userId },
     });
+    if (request.objectType === 'claim') {
+      const nextStatus = input.decision === 'approve' ? 'approved' : input.decision === 'reject' ? 'rejected' : 'returned';
+      await tx.claim.updateMany({
+        where: { id: request.objectId, societyId: scope.societyId },
+        data: { status: nextStatus },
+      });
+    }
     await audit(tx, scope, 'approvals.decided', 'approval_decision', created.id, traceId);
     return row(created);
   });
