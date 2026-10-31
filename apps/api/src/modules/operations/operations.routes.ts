@@ -32,8 +32,11 @@ import {
   createKpi,
   createLoanApplication,
   createLoanVersion,
+  editPermission,
   generateLoanSchedule,
   payClaim,
+  quoteLoanSettlement,
+  updateRecord,
   seedChart,
   trialBalance,
   createLookup,
@@ -665,6 +668,34 @@ export function putTemplate(req: Request, res: Response, next: NextFunction): vo
 export function putCommittee(req: Request, res: Response, next: NextFunction): void {
   const body = z.object({ name: text }).parse(req.body);
   void send(res, next, () => updateCommitteeName(allow(req, 'governance.write'), String(req.params.id), body.name, req.traceId));
+}
+
+export function getPeriods(req: Request, res: Response, next: NextFunction): void {
+  const page = pageOf(req);
+  void send(res, next, () =>
+    listWhere(allow(req, 'ledger.read'), page.page, page.pageSize, (tx, where) =>
+      Promise.all([
+        tx.fiscalPeriod.count({ where }),
+        tx.fiscalPeriod.findMany({ where, orderBy: { startsOn: 'desc' }, take: page.pageSize, skip: (page.page - 1) * page.pageSize }),
+      ]),
+    ),
+  );
+}
+
+export function putRecord(req: Request, res: Response, next: NextFunction): void {
+  const kind = String(req.params.kind);
+  const permission = editPermission(kind);
+  if (!permission) {
+    next(new ApiError(404, 'not_found', 'errors.notFound'));
+    return;
+  }
+  const body = z.record(z.string().trim().min(1).max(2000)).parse(req.body);
+  void send(res, next, () => updateRecord(allow(req, permission), kind, String(req.params.id), body, req.traceId));
+}
+
+export function postSettlement(req: Request, res: Response, next: NextFunction): void {
+  const body = z.object({ days: z.number().int().min(0).max(3650) }).parse(req.body);
+  void send(res, next, () => quoteLoanSettlement(allow(req, 'loans.read'), String(req.params.id), body.days, req.traceId));
 }
 
 export function getRecord(req: Request, res: Response, next: NextFunction): void {

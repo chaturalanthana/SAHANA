@@ -8,6 +8,8 @@ import { MemberPage } from "./pages/MemberPage";
 import { FinancePage } from "./pages/FinancePage";
 import {
   ApprovalsPage,
+  AssetsPage,
+  BankAccountsPage,
   BankLinesPage,
   ClaimsPage,
   EmergencyPage,
@@ -15,6 +17,7 @@ import {
   GovernancePage,
   LoanApplicationsPage,
   LoansPage,
+  PeriodsPage,
   NotificationsPage,
   ProjectsPage,
   SuggestionsPage,
@@ -77,6 +80,12 @@ function Protected() {
         <Route path="/approvals" element={<ApprovalsPage />} />
         <Route path="/approvals/:id" element={<ApprovalsPage />} />
         <Route path="/ledger" element={<FinancePage />} />
+        <Route path="/ledger/periods" element={<PeriodsPage />} />
+        <Route path="/ledger/periods/:id" element={<PeriodsPage />} />
+        <Route path="/ledger/banks" element={<BankAccountsPage />} />
+        <Route path="/ledger/banks/:id" element={<BankAccountsPage />} />
+        <Route path="/ledger/assets" element={<AssetsPage />} />
+        <Route path="/ledger/assets/:id" element={<AssetsPage />} />
         <Route path="/bank-lines" element={<BankLinesPage />} />
         <Route path="/bank-lines/:id" element={<BankLinesPage />} />
         <Route path="/loans/applications" element={<LoanApplicationsPage />} />

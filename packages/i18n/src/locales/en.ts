@@ -115,7 +115,7 @@ export const en = {
       records: "Records",
     },
     notice:
-      "These records are stored for the society. Welfare eligibility, loan interest, approval thresholds, and ESG results are not calculated.",
+      "These records are stored for the society. A published rule is used when the society has stored one. An empty rule stays not calculated.",
     saved: "Saved",
     nav: {
       members: "Members",
@@ -147,6 +147,13 @@ export const en = {
       cashAccount: "Cash account",
       amount: "Amount",
       journalLine: "Journal line",
+      evidence: "Evidence note",
+      csv: "Statement file",
+      days: "Days",
+      proceeds: "Proceeds",
+      assetAccount: "Asset account",
+      gainAccount: "Gain account",
+      lossAccount: "Loss account",
       accountCode: "Account code",
       accountName: "Account name",
       accountType: "Account type",
@@ -182,6 +189,8 @@ export const en = {
     emergency: {
       title: "Emergency assistance",
       hint: "SAHANA coordinates society welfare assistance and does not replace ambulance, police, or other emergency services.",
+      acknowledgeDue: "This request has not been acknowledged within 4 hours.",
+      escalateDue: "This request has not been closed within 8 hours.",
     },
     esg: {
       title: "ESG",
@@ -193,8 +202,14 @@ export const en = {
     },
     action: {
       closePeriod: "Close period",
+      closePeriodHint: "Closing refuses new journals in this period. A period with a draft journal stays open.",
       dispose: "Dispose asset",
+      disposeHint: "Disposal posts one journal for the cash received, the carrying amount, and any gain or loss. It cannot be repeated.",
       importStatement: "Import statement",
+      importStatementHint: "The first line must be bookedOn,amount,description. A bad header writes nothing.",
+      publish: "Publish version",
+      settlement: "Settlement quote",
+      settlementHint: "The quote uses the published rate and the schedule lines that are still due. It does not post a journal.",
       payClaim: "Pay claim",
       payClaimHint:
         "Paying posts a journal and marks the claim paid. A paid claim is not paid again.",
@@ -213,6 +228,8 @@ export const en = {
       unbalanced: "The balance sheet does not balance",
       bank: "Bank reconciliation",
       bankLines: "Bank statement lines",
+      periods: "Periods",
+      banks: "Bank accounts",
       unmatched: "Unmatched statement lines",
       budget: "Budget compared with posted amounts",
       asset: "Assets",

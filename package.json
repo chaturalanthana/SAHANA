@@ -15,8 +15,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "i18n:check": "pnpm --filter @sahana/i18n check",
-    "dev:api": "pnpm --filter @sahana/api dev",
-    "dev:web": "pnpm --filter @sahana/web dev",
+    "dev:api": "node init && pnpm --filter @sahana/api dev",
+    "dev:web": "node init && pnpm --filter @sahana/web dev",
     "db:migrate": "pnpm --filter @sahana/api db:migrate",
     "db:seed": "pnpm --filter @sahana/api db:seed",
     "db:up": "pnpm --filter @sahana/api db:up"

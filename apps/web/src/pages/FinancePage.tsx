@@ -50,9 +50,12 @@ export function FinancePage() {
         {t("modules.finance.statements")}
       </h1>
       {canRead ? (
-        <Link className="text-sm text-primary-ink underline" to="/bank-lines">
-          {t("modules.finance.bankLines")}
-        </Link>
+        <div className="flex flex-col gap-2">
+          <Link className="text-sm text-primary-ink underline" to="/bank-lines">{t("modules.finance.bankLines")}</Link>
+          <Link className="text-sm text-primary-ink underline" to="/ledger/periods">{t("modules.finance.periods")}</Link>
+          <Link className="text-sm text-primary-ink underline" to="/ledger/banks">{t("modules.finance.banks")}</Link>
+          <Link className="text-sm text-primary-ink underline" to="/ledger/assets">{t("modules.finance.asset")}</Link>
+        </div>
       ) : null}
       {report.data ? (
         <>

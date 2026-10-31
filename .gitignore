@@ -22,8 +22,6 @@ test-results/
 blob-report/
 
 # Environment and secrets
-.env
-.env.*
 !.env.example
 *.pem
 *.key
@@ -62,7 +60,6 @@ ios/build/
 
 # IDE and OS
 .idea/
-.vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json.example
 *.swp
@@ -78,3 +75,4 @@ desktop.ini
 # Local embedded PostgreSQL data
 .pgdata/
 apps/api/test/.test-env.json
+config.bat

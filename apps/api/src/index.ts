@@ -2,6 +2,7 @@ import { createApp } from './app';
 import { prisma } from './db';
 import { assertBootEnv, readEnv } from './env';
 import { log } from './logger';
+import { sweepEmergencyDeadlines } from './modules/operations/operations.service';
 
 async function main(): Promise<void> {
   const env = assertBootEnv();
@@ -14,6 +15,14 @@ async function main(): Promise<void> {
   await prisma.$queryRaw`SELECT 1`;
   const app = createApp();
   const port = readEnv().port;
+  if (readEnv().nodeEnv !== 'test') {
+    const timer = setInterval(() => {
+      void sweepEmergencyDeadlines(new Date()).catch((error: unknown) => {
+        log('error', 'emergency sweep failed', { name: error instanceof Error ? error.name : 'unknown' });
+      });
+    }, 60_000);
+    timer.unref();
+  }
   app.listen(port, () => {
     log('info', 'api listening', { port, database: new URL(env.databaseUrl).pathname });
   });

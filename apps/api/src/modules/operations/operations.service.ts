@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import type { Page } from '@sahana/types';
-import { withSociety, type Scope } from '../../db';
+import { prisma, withSociety, type Scope } from '../../db';
 import {
   DEFAULT_MEMBER_CATEGORIES,
   DEFAULT_RELATIONSHIPS,
@@ -8,7 +8,7 @@ import {
   memberStatusAllowed,
 } from '../../domain/members';
 import { calculateEsg, type EsgMeasure, type EsgSource } from '../../domain/esg';
-import { DEFAULT_LOAN_RULE, buildSchedule, parseLoanRule } from '../../domain/loans';
+import { DEFAULT_LOAN_RULE, buildSchedule, parseLoanRule, settlementAmount } from '../../domain/loans';
 import { DEFAULT_WELFARE_RULE, evaluateWelfare, parseWelfareRule } from '../../domain/welfare';
 import { ApiError } from '../../errors';
 
@@ -133,6 +133,9 @@ const recordKinds = {
   loanProduct: 'loans.read',
   loanApplication: 'loans.read',
   bankStatementLine: 'ledger.read',
+  fiscalPeriod: 'ledger.read',
+  bankAccount: 'ledger.read',
+  fixedAsset: 'ledger.read',
   project: 'projects.read',
   suggestion: 'projects.read',
   emergencyRequest: 'emergency.read',
@@ -166,7 +169,13 @@ export async function findRecord(scope: Scope, kind: RecordKind, id: string) {
                     ? await tx.loanApplication.findFirst({ where })
                     : kind === 'bankStatementLine'
                       ? await tx.bankStatementLine.findFirst({ where })
-                      : kind === 'project'
+                      : kind === 'fiscalPeriod'
+                        ? await tx.fiscalPeriod.findFirst({ where })
+                        : kind === 'bankAccount'
+                          ? await tx.bankAccount.findFirst({ where })
+                          : kind === 'fixedAsset'
+                            ? await tx.fixedAsset.findFirst({ where })
+                            : kind === 'project'
                       ? await tx.project.findFirst({ where })
                       : kind === 'suggestion'
                         ? await tx.suggestion.findFirst({ where })
@@ -176,7 +185,118 @@ export async function findRecord(scope: Scope, kind: RecordKind, id: string) {
                             ? await tx.esgGoal.findFirst({ where })
                             : await tx.notificationTemplate.findFirst({ where });
     if (!found) throw new ApiError(404, 'not_found', 'errors.notFound');
+    if (kind === 'emergencyRequest') {
+      const notices = await tx.notificationDelivery.findMany({
+        where: { societyId: scope.societyId, objectType: 'emergency_request', objectId: id, channel: 'in_app' },
+        orderBy: { createdAt: 'asc' },
+      });
+      return { ...row(found), notices: notices.map((item) => item.messageKey) };
+    }
     return row(found);
+  });
+}
+
+const editableFields = {
+  welfareScheme: ['name'],
+  loanProduct: ['name'],
+  esgGoal: ['name'],
+  project: ['name', 'category'],
+  approvalRoute: ['name'],
+  claim: ['evidenceNote'],
+  fixedAsset: ['name'],
+  bankAccount: ['name'],
+} as const;
+
+export function editPermission(kind: string): string | null {
+  switch (kind) {
+    case 'welfareScheme':
+      return 'welfare.write';
+    case 'loanProduct':
+      return 'loans.write';
+    case 'esgGoal':
+      return 'esg.write';
+    case 'project':
+      return 'projects.write';
+    case 'approvalRoute':
+      return 'approvals.read';
+    case 'claim':
+      return 'welfare.write';
+    case 'fixedAsset':
+    case 'bankAccount':
+      return 'ledger.post';
+    default:
+      return null;
+  }
+}
+
+export async function updateRecord(scope: Scope, kind: string, id: string, input: Record<string, string>, traceId: string) {
+  const allowed: readonly string[] | null = kind in editableFields ? editableFields[kind as keyof typeof editableFields] : null;
+  if (!allowed) throw new ApiError(404, 'not_found', 'errors.notFound');
+  const keys = Object.keys(input);
+  if (keys.length === 0 || keys.some((key) => !allowed.includes(key))) {
+    throw new ApiError(422, 'validation', 'errors.validation');
+  }
+  return withSociety(scope, async (tx) => {
+    const where = { id, societyId: scope.societyId };
+    if (kind === 'claim') {
+      const claim = await tx.claim.findFirst({ where });
+      if (!claim) throw new ApiError(404, 'not_found', 'errors.notFound');
+      if (claim.status === 'paid' || claim.status === 'rejected') throw new ApiError(409, 'immutable', 'modules.error.immutable');
+      const updated = await tx.claim.update({ where: { id }, data: { evidenceNote: input.evidenceNote ?? claim.evidenceNote } });
+      await audit(tx, scope, 'claims.evidence_updated', 'claim', id, traceId);
+      return row(updated);
+    }
+    if (kind === 'fixedAsset') {
+      const asset = await tx.fixedAsset.findFirst({ where });
+      if (!asset) throw new ApiError(404, 'not_found', 'errors.notFound');
+      if (asset.disposedAt) throw new ApiError(409, 'immutable', 'modules.error.immutable');
+      const updated = await tx.fixedAsset.update({ where: { id }, data: { name: input.name ?? asset.name } });
+      await audit(tx, scope, 'ledger.asset_renamed', 'fixed_asset', id, traceId);
+      return row(updated);
+    }
+    if (kind === 'bankAccount') {
+      const bank = await tx.bankAccount.findFirst({ where });
+      if (!bank) throw new ApiError(404, 'not_found', 'errors.notFound');
+      const updated = await tx.bankAccount.update({ where: { id }, data: { name: input.name ?? bank.name } });
+      await audit(tx, scope, 'ledger.bank_renamed', 'bank_account', id, traceId);
+      return row(updated);
+    }
+    if (kind === 'welfareScheme') {
+      const existing = await tx.welfareScheme.findFirst({ where });
+      if (!existing) throw new ApiError(404, 'not_found', 'errors.notFound');
+      const updated = await tx.welfareScheme.update({ where: { id }, data: { name: input.name ?? existing.name } });
+      await audit(tx, scope, 'welfare.scheme_renamed', 'welfare_scheme', id, traceId);
+      return row(updated);
+    }
+    if (kind === 'loanProduct') {
+      const existing = await tx.loanProduct.findFirst({ where });
+      if (!existing) throw new ApiError(404, 'not_found', 'errors.notFound');
+      const updated = await tx.loanProduct.update({ where: { id }, data: { name: input.name ?? existing.name } });
+      await audit(tx, scope, 'loans.product_renamed', 'loan_product', id, traceId);
+      return row(updated);
+    }
+    if (kind === 'esgGoal') {
+      const existing = await tx.esgGoal.findFirst({ where });
+      if (!existing) throw new ApiError(404, 'not_found', 'errors.notFound');
+      const updated = await tx.esgGoal.update({ where: { id }, data: { name: input.name ?? existing.name } });
+      await audit(tx, scope, 'esg.goal_renamed', 'esg_goal', id, traceId);
+      return row(updated);
+    }
+    if (kind === 'project') {
+      const existing = await tx.project.findFirst({ where });
+      if (!existing) throw new ApiError(404, 'not_found', 'errors.notFound');
+      const updated = await tx.project.update({
+        where: { id },
+        data: { name: input.name ?? existing.name, category: input.category ?? existing.category },
+      });
+      await audit(tx, scope, 'projects.updated', 'project', id, traceId);
+      return row(updated);
+    }
+    const existing = await tx.approvalRoute.findFirst({ where });
+    if (!existing) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const updated = await tx.approvalRoute.update({ where: { id }, data: { name: input.name ?? existing.name } });
+    await audit(tx, scope, 'approvals.route_renamed', 'approval_route', id, traceId);
+    return row(updated);
   });
 }
 
@@ -1444,4 +1564,100 @@ export async function createApprovalRequest(
     await audit(tx, scope, 'approvals.requested', 'approval_request', created.id, traceId);
     return row(created);
   });
+}
+
+const ACK_MS = 4 * 60 * 60 * 1000;
+const ESCALATE_MS = 8 * 60 * 60 * 1000;
+
+export async function quoteLoanSettlement(scope: Scope, applicationId: string, days: number, traceId: string) {
+  return withSociety(scope, async (tx) => {
+    const application = await tx.loanApplication.findFirst({ where: { id: applicationId, societyId: scope.societyId } });
+    if (!application) throw new ApiError(404, 'not_found', 'errors.notFound');
+    const version = await tx.loanProductVersion.findFirst({
+      where: { id: application.productVersionId, societyId: scope.societyId },
+    });
+    const rule = version?.publishedAt ? parseLoanRule(version.ruleBody) : null;
+    if (!rule) throw new ApiError(409, 'not_calculated', 'modules.error.notCalculated');
+    const lines = await tx.loanScheduleLine.findMany({
+      where: { societyId: scope.societyId, applicationId },
+      orderBy: { installmentNo: 'asc' },
+    });
+    if (lines.length === 0) throw new ApiError(409, 'not_calculated', 'modules.error.notCalculated');
+    let remaining = new Prisma.Decimal(0);
+    let unpaid = new Prisma.Decimal(0);
+    for (const line of lines) {
+      if (line.status !== 'due') continue;
+      remaining = remaining.plus(line.principal);
+      unpaid = unpaid.plus(line.fee);
+    }
+    const amount = settlementAmount({
+      remainingPrincipal: remaining.toString(),
+      annualRatePercent: rule.annualRatePercent,
+      days,
+      unpaidFee: unpaid.toString(),
+    });
+    await audit(tx, scope, 'loans.settlement_quoted', 'loan_application', applicationId, traceId);
+    return {
+      amount,
+      remainingPrincipal: remaining.toString(),
+      unpaidFee: unpaid.toString(),
+      annualRatePercent: rule.annualRatePercent,
+      days,
+    };
+  });
+}
+
+async function ensureNotice(
+  tx: Prisma.TransactionClient,
+  scope: Scope,
+  request: { id: string; memberId: string },
+  messageKey: string,
+): Promise<number> {
+  const existing = await tx.notificationDelivery.findFirst({
+    where: {
+      societyId: scope.societyId,
+      objectType: 'emergency_request',
+      objectId: request.id,
+      messageKey,
+      channel: 'in_app',
+    },
+  });
+  if (existing) return 0;
+  await tx.notificationDelivery.create({
+    data: {
+      societyId: scope.societyId,
+      memberId: request.memberId,
+      channel: 'in_app',
+      status: 'delivered',
+      messageKey,
+      objectType: 'emergency_request',
+      objectId: request.id,
+      createdBy: scope.userId,
+    },
+  });
+  return 1;
+}
+
+export async function sweepEmergencyDeadlines(now: Date) {
+  const societies = await prisma.society.findMany({ select: { id: true } });
+  let acknowledged = 0;
+  let escalated = 0;
+  for (const society of societies) {
+    const requests = await prisma.emergencyRequest.findMany({
+      where: { societyId: society.id, status: { not: 'closed' } },
+    });
+    for (const request of requests) {
+      const scope = { societyId: society.id, userId: request.createdBy };
+      const age = now.getTime() - request.createdAt.getTime();
+      const created = await withSociety(scope, async (tx) => {
+        const updates = await tx.emergencyUpdate.count({ where: { societyId: scope.societyId, requestId: request.id } });
+        const ack = age >= ACK_MS && updates === 0 ? await ensureNotice(tx, scope, request, 'modules.emergency.acknowledgeDue') : 0;
+        const esc = age >= ESCALATE_MS ? await ensureNotice(tx, scope, request, 'modules.emergency.escalateDue') : 0;
+        return { ack, esc };
+      });
+      acknowledged += created.ack;
+      escalated += created.esc;
+    }
+  }
+  return { acknowledged, escalated };
 }

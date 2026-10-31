@@ -19,7 +19,7 @@ test('opens the member registry and keeps the formula notice visible', async ({ 
   if (await menu.isVisible()) await menu.click();
   await page.getByRole('link', { name: 'Members' }).click();
   await expect(page.getByRole('heading', { name: 'Members and family' })).toBeVisible();
-  await expect(page.getByText('Welfare eligibility, loan interest, approval thresholds, and ESG results are not calculated.')).toBeVisible();
+  await expect(page.getByText('These records are stored for the society. A published rule is used when the society has stored one. An empty rule stays not calculated.')).toBeVisible();
   const memberNo = `M-${Date.now().toString().slice(-6)}`;
   await page.getByLabel('Member number').fill(memberNo);
   await page.getByLabel('Given name').fill('Nimal');

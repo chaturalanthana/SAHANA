@@ -71,3 +71,5 @@ These three actions sit on the detail screen. The button is hidden when the sign
 - **Bank line matching.** Open Ledger, then Bank statement lines, then a line. Enter the journal line id. The statement amount must equal that line's debit minus credit, and the line must be on the same account as the bank account. A matched line is not matched again.
 
 The screens use the same labels in English, Sinhala, and Tamil. Sinhala and Tamil remain unreviewed drafts.
+
+Ledger also links to periods, bank accounts, and assets. Close period refuses a period that still has a draft journal. Import statement expects the header `bookedOn,amount,description`. Dispose asset posts one journal. A loan application can show a settlement quote after a schedule exists. The quote does not post a journal. An open emergency that is still unacknowledged after 4 hours, or still open after 8 hours, gets an in-app notice. Email and SMS are not sent.

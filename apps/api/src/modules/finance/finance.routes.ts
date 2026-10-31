@@ -15,6 +15,7 @@ import {
   fundLedger,
   importStatementCsv,
   listAssets,
+  listBankAccounts,
   listFunds,
   listStatementLines,
   matchStatement,
@@ -123,6 +124,11 @@ export function postAsset(req: Request, res: Response, next: NextFunction): void
     })
     .parse(req.body);
   void send(res, next, () => createAsset(allow(req, 'ledger.post'), body, req.traceId), 201);
+}
+
+export function getBanks(req: Request, res: Response, next: NextFunction): void {
+  const page = parsePage(req.query);
+  void send(res, next, () => listBankAccounts(allow(req, 'ledger.read'), page.page, page.pageSize));
 }
 
 export function getStatementLines(req: Request, res: Response, next: NextFunction): void {
