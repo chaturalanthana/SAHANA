@@ -29,6 +29,7 @@ import {
   getMemberLedger,
   getReconciliation,
   getStatements,
+  getBanks,
   getStatementLines,
   postAsset,
   postBank,
@@ -65,6 +66,7 @@ import {
   getMyMember,
   getProjects,
   getApprovalRequests,
+  getPeriods,
   getRecord,
   getRoutes,
   getTemplates,
@@ -78,6 +80,7 @@ import {
   postAppointment,
   postCommittee,
   putCommittee,
+  putRecord,
   putTemplate,
   postGovernanceDocument,
   postMeeting,
@@ -98,6 +101,7 @@ import {
   postLoan,
   postLoanApplication,
   postLoanSchedule,
+  postSettlement,
   postLoanVersion,
   postPayClaim,
   postLookup,
@@ -206,6 +210,7 @@ export function createApp() {
   app.post('/api/v1/committees', requireAuth, safe(postCommittee));
   app.put('/api/v1/committees/:id', requireAuth, safe(putCommittee));
   app.get('/api/v1/records/:kind/:id', requireAuth, safe(getRecord));
+  app.put('/api/v1/records/:kind/:id', requireAuth, safe(putRecord));
   app.post('/api/v1/committees/:id/appointments', requireAuth, safe(postAppointment));
   app.post('/api/v1/committees/:id/meetings', requireAuth, safe(postMeeting));
   app.post('/api/v1/meetings/:id/resolutions', requireAuth, safe(postResolution));
@@ -232,6 +237,7 @@ export function createApp() {
   app.post('/api/v1/funds', requireAuth, safe(postFund));
   app.get('/api/v1/funds/:id/ledger', requireAuth, safe(getFundLedger));
   app.get('/api/v1/members/:id/ledger', requireAuth, safe(getMemberLedger));
+  app.get('/api/v1/bank-accounts', requireAuth, safe(getBanks));
   app.post('/api/v1/bank-accounts', requireAuth, safe(postBank));
   app.post('/api/v1/bank-statement-lines', requireAuth, safe(postStatement));
   app.get('/api/v1/bank-statement-lines', requireAuth, safe(getStatementLines));
@@ -244,6 +250,7 @@ export function createApp() {
   app.post('/api/v1/assets', requireAuth, safe(postAsset));
   app.post('/api/v1/assets/:id/dispose', requireAuth, safe(postDispose));
   app.post('/api/v1/investments', requireAuth, safe(postInvestment));
+  app.get('/api/v1/fiscal-periods', requireAuth, safe(getPeriods));
   app.post('/api/v1/fiscal-periods', requireAuth, safe(postPeriod));
   app.post('/api/v1/fiscal-periods/:id/close', requireAuth, safe(postClosePeriod));
   app.get('/api/v1/journal-documents', requireAuth, safe(getJournals));
@@ -257,6 +264,7 @@ export function createApp() {
   app.post('/api/v1/loan-products/:id/versions', requireAuth, safe(postLoanVersion));
   app.post('/api/v1/loan-applications', requireAuth, safe(postLoanApplication));
   app.post('/api/v1/loan-applications/:id/schedule', requireAuth, safe(postLoanSchedule));
+  app.post('/api/v1/loan-applications/:id/settlement', requireAuth, safe(postSettlement));
   app.get('/api/v1/projects', requireAuth, safe(getProjects));
   app.post('/api/v1/projects', requireAuth, safe(postProject));
   app.post('/api/v1/projects/:id/participants', requireAuth, safe(postProjectParticipant));

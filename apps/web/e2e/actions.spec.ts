@@ -238,6 +238,10 @@ async function exercise(
   await expect(
     page.getByText("1. 2026-04-01 · Principal 100.0000"),
   ).toBeVisible();
+  const quote = page.getByRole("form", { name: "Settlement quote" });
+  await quote.getByLabel("Days").fill("10");
+  await quote.getByRole("button", { name: "Settlement quote" }).click();
+  await expect(page.getByText("1200.0000")).toBeVisible();
 
   await page.goto("/ledger");
   await expect(
@@ -250,4 +254,40 @@ async function exercise(
   await match.getByRole("button", { name: "Match bank line" }).click();
   await expect(page.getByRole("status")).toHaveText("Saved");
   await expect(page.getByText(debit.id)).toBeVisible();
+
+  if (!suffix.startsWith("0-")) return;
+  await page.goto(`/ledger/banks/${bank.id}`);
+  const importer = page.getByRole("form", { name: "Import statement" });
+  await importer
+    .getByLabel("Statement file")
+    .fill("bookedOn,amount,description\n2026-05-02,4.0000,Desk line");
+  await importer.getByRole("button", { name: "Import statement" }).click();
+  await expect(page.getByRole("status")).toHaveText("Saved");
+
+  const assetAccount = await api<{ id: string }>(page, "POST", "/api/v1/accounts", {
+    code: `A${suffix.replace(/\D/g, "").slice(-6)}`,
+    name: "E2E asset",
+    accountType: "asset",
+  });
+  const asset = await api<{ id: string }>(page, "POST", "/api/v1/assets", {
+    name: `Cupboard ${suffix}`,
+    cost: "80.0000",
+    acquiredOn: "2026-01-01",
+  });
+  await page.goto(`/ledger/assets/${asset.id}`);
+  const disposal = page.getByRole("form", { name: "Dispose asset" });
+  await disposal.getByLabel("Period").fill(period.id);
+  await disposal.getByLabel("Cash account").fill(cash?.id ?? "");
+  await disposal.getByLabel("Asset account").fill(assetAccount.id);
+  await disposal.getByLabel("Gain account").fill(income?.id ?? "");
+  await disposal.getByLabel("Loss account").fill(expense?.id ?? "");
+  await disposal.getByLabel("Proceeds").fill("80.0000");
+  await disposal.getByLabel("Reason").fill("E2E disposal");
+  await disposal.getByRole("button", { name: "Dispose asset" }).click();
+  await expect(page.getByRole("status")).toHaveText("Saved");
+
+  await page.goto(`/ledger/periods/${period.id}`);
+  await page.getByRole("button", { name: "Close period" }).click();
+  await expect(page.getByRole("status")).toHaveText("Saved");
+  await expect(page.getByText("closed", { exact: true })).toBeVisible();
 }

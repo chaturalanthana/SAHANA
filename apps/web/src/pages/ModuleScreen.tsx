@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiClientError } from "@sahana/api-client";
@@ -19,9 +19,58 @@ export type ModuleConfig = {
   fields: Field[];
   editPath?: string;
   editBodyKey?: string;
-  detailAction?: "decision" | "emergency";
+  detailAction?: "decision" | "emergency" | "suggestion" | "close" | "import" | "dispose";
+  editFields?: Field[];
+  editPermission?: string;
+  publish?: boolean;
   links?: { to: string; labelKey: string }[];
 };
+
+const fieldLabels: Record<string, string> = {
+  name: "modules.field.name",
+  memberNo: "modules.field.memberNo",
+  status: "modules.field.statusCode",
+  statusCode: "modules.field.statusCode",
+  category: "modules.field.categoryCode",
+  categoryCode: "modules.field.categoryCode",
+  body: "modules.field.description",
+  description: "modules.field.description",
+  amount: "modules.field.amount",
+  phone: "modules.field.phone",
+  requestType: "modules.field.requestType",
+  evidenceNote: "modules.field.evidence",
+  eligibilityStatus: "modules.welfare.title",
+  eligibilityReason: "modules.field.reason",
+  code: "modules.field.name",
+  language: "common.language.label",
+  channel: "modules.nav.notifications",
+  title: "modules.field.name",
+  cost: "modules.finance.asset",
+  journalLineId: "modules.field.journalLine",
+  notices: "modules.nav.notifications",
+  startsOn: "modules.field.startOn",
+  endsOn: "modules.field.startOn",
+  acquiredOn: "modules.field.startOn",
+  usefulLifeYears: "modules.finance.depreciation",
+  disposedAt: "modules.action.dispose",
+  policyStatus: "modules.field.statusCode",
+  objectType: "modules.field.name",
+  objectId: "modules.field.reason",
+  memberId: "modules.field.memberNo",
+  accountId: "modules.field.accountCode",
+};
+
+const hiddenFields = new Set(["societyId", "createdBy", "updatedBy", "idempotencyKey", "ruleBody", "formulaBody"]);
+
+function fieldText(key: string, value: unknown, t: (label: string) => string): string | null {
+  if (hiddenFields.has(key) || !(key in fieldLabels)) return null;
+  if (key === "notices" && Array.isArray(value)) {
+    return value.length === 0 ? t("common.state.empty") : value.map((item) => t(String(item))).join(" · ");
+  }
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (value === null) return "—";
+  return null;
+}
 
 function labelOf(item: Record<string, unknown>): string {
   return [
@@ -184,7 +233,25 @@ function Detail({ config, id }: { config: ModuleConfig; id: string }) {
   const [scheduleLines, setScheduleLines] = useState<
     { installmentNo: number; dueOn: string; principal: string }[]
   >([]);
+  const [editDraft, setEditDraft] = useState<Record<string, string>>({});
+  const [csv, setCsv] = useState("bookedOn,amount,description\n");
+  const [dispose, setDispose] = useState({
+    periodId: "",
+    cashAccountId: "",
+    assetAccountId: "",
+    gainAccountId: "",
+    lossAccountId: "",
+    proceeds: "",
+    reason: "",
+  });
+  const [quoteDays, setQuoteDays] = useState("0");
+  const [quoteAmount, setQuoteAmount] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const editPermission = config.editPermission ?? config.writePermission;
+  const canEdit =
+    Boolean(config.editFields?.length) &&
+    (editPermission ? (session.me?.permissions.includes(editPermission) ?? false) : false);
+  const canPost = session.me?.permissions.includes("ledger.post") ?? false;
   const canWrite = config.writePermission
     ? (session.me?.permissions.includes(config.writePermission) ?? false)
     : false;
@@ -202,7 +269,9 @@ function Detail({ config, id }: { config: ModuleConfig; id: string }) {
       ? (session.me?.permissions.includes("approvals.decide") ?? false)
       : config.detailAction === "emergency"
         ? (session.me?.permissions.includes("emergency.coordinate") ?? false)
-        : false;
+        : config.detailAction === "suggestion"
+          ? (session.me?.permissions.includes("projects.write") ?? false)
+          : false;
   const record = useQuery({
     queryKey: ["record", config.detailKind, id],
     queryFn: () =>
@@ -210,6 +279,16 @@ function Detail({ config, id }: { config: ModuleConfig; id: string }) {
         `/api/v1/records/${config.detailKind}/${id}`,
       ),
   });
+  const editNames = config.editFields?.map((field) => field.name).join(",") ?? "";
+  useEffect(() => {
+    if (!record.data || !config.editFields) return;
+    const next: Record<string, string> = {};
+    for (const field of config.editFields) {
+      const value = record.data[field.name];
+      next[field.name] = typeof value === "string" ? value : "";
+    }
+    setEditDraft(next);
+  }, [record.data, editNames, config.editFields]);
   const saveEdit = useMutation({
     mutationFn: () =>
       client.request(`${config.editPath}/${id}`, {
@@ -230,6 +309,70 @@ function Detail({ config, id }: { config: ModuleConfig; id: string }) {
         : t("common.state.error"),
     );
   }
+  const saveFields = useMutation({
+    mutationFn: () =>
+      client.request(`/api/v1/records/${config.detailKind}/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(editDraft),
+      }),
+    onSuccess: async () => {
+      setMessage(t("modules.saved"));
+      await queryClient.invalidateQueries({ queryKey: ["record", config.detailKind, id] });
+    },
+    onError: fail,
+  });
+  const publishVersion = useMutation({
+    mutationFn: () => {
+      const path = config.detailKind === "loanProduct" ? `/api/v1/loan-products/${id}/versions` : `/api/v1/welfare-schemes/${id}/versions`;
+      return client.request(path, { method: "POST", body: JSON.stringify({ publish: true }) });
+    },
+    onSuccess: async () => {
+      setMessage(t("modules.saved"));
+      await queryClient.invalidateQueries({ queryKey: ["record", config.detailKind, id] });
+    },
+    onError: fail,
+  });
+  const quoteSettlement = useMutation({
+    mutationFn: () =>
+      client.request<{ amount: string }>(`/api/v1/loan-applications/${id}/settlement`, {
+        method: "POST",
+        body: JSON.stringify({ days: Number(quoteDays) }),
+      }),
+    onSuccess: (result) => {
+      setQuoteAmount(result.amount);
+      setMessage(t("modules.saved"));
+    },
+    onError: fail,
+  });
+  const closePeriod = useMutation({
+    mutationFn: () => client.request(`/api/v1/fiscal-periods/${id}/close`, { method: "POST" }),
+    onSuccess: async () => {
+      setMessage(t("modules.saved"));
+      await queryClient.invalidateQueries({ queryKey: ["record", config.detailKind, id] });
+    },
+    onError: fail,
+  });
+  const importCsv = useMutation({
+    mutationFn: () =>
+      client.request(`/api/v1/bank-accounts/${id}/statement-import`, {
+        method: "POST",
+        body: JSON.stringify({ csv }),
+      }),
+    onSuccess: () => setMessage(t("modules.saved")),
+    onError: fail,
+  });
+  const disposeAsset = useMutation({
+    mutationFn: () =>
+      client.request(`/api/v1/assets/${id}/dispose`, {
+        method: "POST",
+        body: JSON.stringify(dispose),
+      }),
+    onSuccess: async () => {
+      setMessage(t("modules.saved"));
+      await queryClient.invalidateQueries({ queryKey: ["record", config.detailKind, id] });
+    },
+    onError: fail,
+  });
   const payClaim = useMutation({
     mutationFn: () =>
       client.request(`/api/v1/claims/${id}/pay`, {
@@ -287,6 +430,12 @@ function Detail({ config, id }: { config: ModuleConfig; id: string }) {
           }),
         });
       }
+      if (config.detailAction === "suggestion") {
+        return client.request(`/api/v1/suggestions/${id}/decision`, {
+          method: "POST",
+          body: JSON.stringify({ status: action.decision || "accepted" }),
+        });
+      }
       return client.request(`/api/v1/emergency-requests/${id}/updates`, {
         method: "POST",
         body: JSON.stringify({
@@ -312,18 +461,140 @@ function Detail({ config, id }: { config: ModuleConfig; id: string }) {
       </h1>
       <Card>
         {record.data ? (
-          Object.entries(record.data).map(([key, value]) => (
-            <p key={key} className="break-words text-sm">
-              <span className="font-semibold text-heading">{key}: </span>
-              <span className="text-body">
-                {typeof value === "string" ? value : JSON.stringify(value)}
-              </span>
-            </p>
-          ))
+          <dl className="grid gap-3">
+            {Object.entries(record.data).map(([key, value]) => {
+              const text = fieldText(key, value, t);
+              if (text === null) return null;
+              return (
+                <div key={key}>
+                  <dt className="text-sm font-semibold text-heading">{t(fieldLabels[key] ?? key)}</dt>
+                  <dd className="break-words text-sm text-body">{text}</dd>
+                </div>
+              );
+            })}
+          </dl>
         ) : (
           <p className="text-sm text-body">{t("common.state.loading")}</p>
         )}
       </Card>
+      {canEdit && record.data?.status !== "paid" && record.data?.status !== "rejected" && !record.data?.disposedAt ? (
+        <Card>
+          <form
+            aria-label={t("modules.screen.edit")}
+            className="grid gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              saveFields.mutate();
+            }}
+          >
+            {config.editFields?.map((field) => (
+              <TextField
+                key={field.name}
+                label={t(field.labelKey)}
+                name={field.name}
+                value={editDraft[field.name] ?? ""}
+                onChange={(event) => setEditDraft((current) => ({ ...current, [field.name]: event.target.value }))}
+                required
+                autoComplete="off"
+              />
+            ))}
+            <div>
+              <Button type="submit" loading={saveFields.isPending}>{t("common.action.save")}</Button>
+            </div>
+          </form>
+        </Card>
+      ) : null}
+      {canWrite && config.publish ? (
+        <div>
+          <Button type="button" variant="secondary" loading={publishVersion.isPending} onClick={() => publishVersion.mutate()}>
+            {t("modules.action.publish")}
+          </Button>
+        </div>
+      ) : null}
+      {config.detailAction === "close" && canPost ? (
+        <Card>
+          <form
+            aria-label={t("modules.action.closePeriod")}
+            className="grid gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              closePeriod.mutate();
+            }}
+          >
+            <p className="text-sm text-body">{t("modules.action.closePeriodHint")}</p>
+            <div>
+              <Button type="submit" variant="danger" loading={closePeriod.isPending}>{t("modules.action.closePeriod")}</Button>
+            </div>
+          </form>
+        </Card>
+      ) : null}
+      {config.detailAction === "import" && canPost ? (
+        <Card>
+          <form
+            aria-label={t("modules.action.importStatement")}
+            className="grid gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              importCsv.mutate();
+            }}
+          >
+            <p className="text-sm text-body">{t("modules.action.importStatementHint")}</p>
+            <label className="flex flex-col gap-1 text-sm" htmlFor="csv">
+              <span className="font-medium text-heading">{t("modules.field.csv")}</span>
+              <textarea
+                id="csv"
+                name="csv"
+                required
+                rows={6}
+                value={csv}
+                onChange={(event) => setCsv(event.target.value)}
+                className="min-h-11 rounded-md border border-border bg-surface px-3 py-2 text-base text-heading"
+              />
+            </label>
+            <div>
+              <Button type="submit" loading={importCsv.isPending}>{t("modules.action.importStatement")}</Button>
+            </div>
+          </form>
+        </Card>
+      ) : null}
+      {config.detailAction === "dispose" && canPost && !record.data?.disposedAt ? (
+        <Card>
+          <form
+            aria-label={t("modules.action.dispose")}
+            className="grid gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              disposeAsset.mutate();
+            }}
+          >
+            <p className="text-sm text-body">{t("modules.action.disposeHint")}</p>
+            {(
+              [
+                ["periodId", "modules.field.period"],
+                ["cashAccountId", "modules.field.cashAccount"],
+                ["assetAccountId", "modules.field.assetAccount"],
+                ["gainAccountId", "modules.field.gainAccount"],
+                ["lossAccountId", "modules.field.lossAccount"],
+                ["proceeds", "modules.field.proceeds"],
+                ["reason", "modules.field.reason"],
+              ] as const
+            ).map(([name, label]) => (
+              <TextField
+                key={name}
+                label={t(label)}
+                name={name}
+                value={dispose[name]}
+                onChange={(event) => setDispose((current) => ({ ...current, [name]: event.target.value }))}
+                required
+                autoComplete="off"
+              />
+            ))}
+            <div>
+              <Button type="submit" variant="danger" loading={disposeAsset.isPending}>{t("modules.action.dispose")}</Button>
+            </div>
+          </form>
+        </Card>
+      ) : null}
       {canWrite && config.editPath ? (
         <Card>
           <form
@@ -500,6 +771,32 @@ function Detail({ config, id }: { config: ModuleConfig; id: string }) {
           ) : null}
         </Card>
       ) : null}
+      {config.detailKind === "loanApplication" && (session.me?.permissions.includes("loans.read") ?? false) ? (
+        <Card>
+          <form
+            aria-label={t("modules.action.settlement")}
+            className="grid gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              quoteSettlement.mutate();
+            }}
+          >
+            <p className="text-sm text-body">{t("modules.action.settlementHint")}</p>
+            <TextField
+              label={t("modules.field.days")}
+              name="days"
+              inputMode="numeric"
+              value={quoteDays}
+              onChange={(event) => setQuoteDays(event.target.value)}
+              required
+            />
+            <div>
+              <Button type="submit" variant="secondary" loading={quoteSettlement.isPending}>{t("modules.action.settlement")}</Button>
+            </div>
+          </form>
+          {quoteAmount ? <p className="mt-3 text-sm text-heading">{quoteAmount}</p> : null}
+        </Card>
+      ) : null}
       {canMatch ? (
         <Card>
           <form
@@ -540,6 +837,7 @@ function Detail({ config, id }: { config: ModuleConfig; id: string }) {
               runAction.mutate();
             }}
           >
+            {config.detailAction === "suggestion" ? null : (
             <TextField
               label={t("modules.field.reason")}
               name="reason"
@@ -552,11 +850,12 @@ function Detail({ config, id }: { config: ModuleConfig; id: string }) {
               }
               required
             />
-            {config.detailAction === "decision" ? (
+            )}
+            {config.detailAction === "decision" || config.detailAction === "suggestion" ? (
               <TextField
                 label={t("modules.nav.approvals")}
                 name="decision"
-                value={action.decision ?? "approve"}
+                value={action.decision ?? (config.detailAction === "suggestion" ? "accepted" : "approve")}
                 onChange={(event) =>
                   setAction((current) => ({
                     ...current,
@@ -602,6 +901,8 @@ export function WelfareSchemesPage() {
         createPath: "/api/v1/welfare-schemes",
         readPermission: "welfare.read",
         writePermission: "welfare.write",
+        publish: true,
+        editFields: [{ name: "name", labelKey: "modules.field.name" }],
         fields: [{ name: "name", labelKey: "modules.field.name" }],
       }}
     />
@@ -620,6 +921,7 @@ export function ClaimsPage() {
         createPath: "/api/v1/claims",
         readPermission: "welfare.read",
         writePermission: "welfare.write",
+        editFields: [{ name: "evidenceNote", labelKey: "modules.field.evidence" }],
         fields: [
           { name: "memberId", labelKey: "modules.field.memberNo" },
           { name: "schemeVersionId", labelKey: "modules.welfare.title" },
@@ -664,6 +966,8 @@ export function LoansPage() {
         createPath: "/api/v1/loan-products",
         readPermission: "loans.read",
         writePermission: "loans.write",
+        publish: true,
+        editFields: [{ name: "name", labelKey: "modules.field.name" }],
         links: [
           { to: "/loans/applications", labelKey: "modules.loans.applications" },
         ],
@@ -683,6 +987,61 @@ export function LoanApplicationsPage() {
         basePath: "/loans/applications",
         detailKind: "loanApplication",
         readPermission: "loans.read",
+        fields: [],
+      }}
+    />
+  );
+}
+
+export function PeriodsPage() {
+  return (
+    <ModuleScreen
+      config={{
+        titleKey: "modules.finance.periods",
+        hintKey: "modules.action.closePeriodHint",
+        listPath: "/api/v1/fiscal-periods",
+        basePath: "/ledger/periods",
+        detailKind: "fiscalPeriod",
+        readPermission: "ledger.read",
+        detailAction: "close",
+        fields: [],
+      }}
+    />
+  );
+}
+
+export function BankAccountsPage() {
+  return (
+    <ModuleScreen
+      config={{
+        titleKey: "modules.finance.banks",
+        hintKey: "modules.action.importStatementHint",
+        listPath: "/api/v1/bank-accounts",
+        basePath: "/ledger/banks",
+        detailKind: "bankAccount",
+        readPermission: "ledger.read",
+        editPermission: "ledger.post",
+        editFields: [{ name: "name", labelKey: "modules.field.name" }],
+        detailAction: "import",
+        fields: [],
+      }}
+    />
+  );
+}
+
+export function AssetsPage() {
+  return (
+    <ModuleScreen
+      config={{
+        titleKey: "modules.finance.asset",
+        hintKey: "modules.action.disposeHint",
+        listPath: "/api/v1/assets",
+        basePath: "/ledger/assets",
+        detailKind: "fixedAsset",
+        readPermission: "ledger.read",
+        editPermission: "ledger.post",
+        editFields: [{ name: "name", labelKey: "modules.field.name" }],
+        detailAction: "dispose",
         fields: [],
       }}
     />
@@ -736,6 +1095,10 @@ export function ProjectsPage() {
         createPath: "/api/v1/projects",
         readPermission: "projects.read",
         writePermission: "projects.write",
+        editFields: [
+          { name: "name", labelKey: "modules.field.name" },
+          { name: "category", labelKey: "modules.field.categoryCode" },
+        ],
         fields: [
           { name: "name", labelKey: "modules.field.name" },
           { name: "category", labelKey: "modules.field.categoryCode" },
@@ -757,6 +1120,7 @@ export function SuggestionsPage() {
         createPath: "/api/v1/suggestions",
         readPermission: "projects.read",
         writePermission: "projects.write",
+        detailAction: "suggestion",
         fields: [
           { name: "memberId", labelKey: "modules.field.memberNo" },
           { name: "body", labelKey: "modules.field.description" },
@@ -802,6 +1166,7 @@ export function EsgPage() {
         createPath: "/api/v1/esg-goals",
         readPermission: "esg.read",
         writePermission: "esg.write",
+        editFields: [{ name: "name", labelKey: "modules.field.name" }],
         fields: [{ name: "name", labelKey: "modules.field.name" }],
       }}
     />
