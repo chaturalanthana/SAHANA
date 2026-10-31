@@ -1,0 +1,724 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Society {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String
+  defaultLanguage String   @default("en") @map("default_language")
+  currencyCode    String   @default("LKR") @map("currency_code")
+  timezone        String   @default("Asia/Colombo")
+  status          String   @default("active")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy       String?  @map("created_by") @db.Uuid
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedBy       String?  @map("updated_by") @db.Uuid
+
+  memberships    SocietyUser[]
+  roles          Role[]
+  sessions       Session[]
+  configVersions ConfigVersion[]
+  auditEvents    AuditEvent[]
+  consentDocuments   ConsentDocument[]
+  consentAcceptances ConsentAcceptance[]
+
+  @@map("societies")
+}
+
+model User {
+  id                String   @id @default(uuid()) @db.Uuid
+  email             String   @unique
+  passwordHash      String   @map("password_hash")
+  displayName       String   @map("display_name")
+  status            String   @default("active")
+  preferredLanguage String?  @map("preferred_language")
+  mfaFactorRef      String?  @map("mfa_factor_ref")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy         String?  @map("created_by") @db.Uuid
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedBy         String?  @map("updated_by") @db.Uuid
+
+  memberships SocietyUser[]
+  sessions    Session[]
+
+  @@map("users")
+}
+
+model SocietyUser {
+  id        String   @id @default(uuid()) @db.Uuid
+  societyId String   @map("society_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  status    String   @default("active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  society Society           @relation(fields: [societyId], references: [id])
+  user    User              @relation(fields: [userId], references: [id])
+  roles   SocietyUserRole[]
+
+  @@unique([societyId, userId])
+  @@index([societyId])
+  @@map("society_users")
+}
+
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  description String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model Role {
+  id        String   @id @default(uuid()) @db.Uuid
+  societyId String   @map("society_id") @db.Uuid
+  code      String
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+
+  society     Society           @relation(fields: [societyId], references: [id])
+  permissions RolePermission[]
+  assignments SocietyUserRole[]
+
+  @@unique([societyId, code])
+  @@map("roles")
+}
+
+model RolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model SocietyUserRole {
+  societyUserId String @map("society_user_id") @db.Uuid
+  roleId        String @map("role_id") @db.Uuid
+
+  societyUser SocietyUser @relation(fields: [societyUserId], references: [id])
+  role        Role        @relation(fields: [roleId], references: [id])
+
+  @@id([societyUserId, roleId])
+  @@map("society_user_roles")
+}
+
+model Session {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  societyId  String    @map("society_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  clientKind String    @map("client_kind")
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy  String?   @map("created_by") @db.Uuid
+
+  user    User    @relation(fields: [userId], references: [id])
+  society Society @relation(fields: [societyId], references: [id])
+
+  @@index([societyId, userId])
+  @@map("sessions")
+}
+
+model AuditEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  societyId  String?  @map("society_id") @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String
+  objectType String   @map("object_type")
+  objectId   String?  @map("object_id") @db.Uuid
+  traceId    String   @map("trace_id")
+  detail     Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  society Society? @relation(fields: [societyId], references: [id])
+
+  @@index([societyId, createdAt])
+  @@map("audit_events")
+}
+
+model ConfigDefinition {
+  key       String   @id
+  valueType String   @map("value_type")
+  scope     String
+  critical  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("config_definitions")
+}
+
+model ConfigVersion {
+  id            String   @id @default(uuid()) @db.Uuid
+  societyId     String?  @map("society_id") @db.Uuid
+  definitionKey String   @map("definition_key")
+  value         Json
+  status        String
+  effectiveFrom DateTime @default(now()) @map("effective_from") @db.Timestamptz(6)
+  reason        String
+  proposalId    String?  @map("proposal_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy     String   @map("created_by") @db.Uuid
+
+  society Society? @relation(fields: [societyId], references: [id])
+
+  @@index([societyId, definitionKey, status])
+  @@map("config_versions")
+}
+
+model ConsentDocument {
+  id        String   @id @default(uuid()) @db.Uuid
+  societyId String   @map("society_id") @db.Uuid
+  kind      String
+  language  String
+  versionNo Int      @map("version_no")
+  title     String
+  body      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+
+  society     Society             @relation(fields: [societyId], references: [id])
+  acceptances ConsentAcceptance[]
+
+  @@unique([societyId, kind, language, versionNo])
+  @@map("consent_documents")
+}
+
+model ConsentAcceptance {
+  id         String   @id @default(uuid()) @db.Uuid
+  societyId  String   @map("society_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  documentId String   @map("document_id") @db.Uuid
+  acceptedAt DateTime @default(now()) @map("accepted_at") @db.Timestamptz(6)
+
+  society  Society         @relation(fields: [societyId], references: [id])
+  document ConsentDocument @relation(fields: [documentId], references: [id])
+
+  @@map("consent_acceptances")
+}
+
+model LookupValue {
+  id        String   @id @default(uuid()) @db.Uuid
+  societyId String   @map("society_id") @db.Uuid
+  listCode  String   @map("list_code")
+  code      String
+  label     String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String   @map("created_by") @db.Uuid
+
+  @@unique([societyId, listCode, code])
+  @@index([societyId, listCode])
+  @@map("lookup_values")
+}
+
+model Member {
+  id           String   @id @default(uuid()) @db.Uuid
+  societyId    String   @map("society_id") @db.Uuid
+  userId       String?  @map("user_id") @db.Uuid
+  memberNo     String   @map("member_no")
+  givenName    String   @map("given_name")
+  familyName   String   @map("family_name")
+  employeeNo   String   @default("") @map("employee_no")
+  department   String   @default("")
+  statusCode   String   @map("status_code")
+  categoryCode String   @map("category_code")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy    String   @map("created_by") @db.Uuid
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedBy    String?  @map("updated_by") @db.Uuid
+
+  @@unique([societyId, memberNo])
+  @@index([societyId, familyName, givenName])
+  @@map("members")
+}
+
+model MemberStatusHistory {
+  id         String   @id @default(uuid()) @db.Uuid
+  societyId  String   @map("society_id") @db.Uuid
+  memberId   String   @map("member_id") @db.Uuid
+  statusCode String   @map("status_code")
+  reason     String
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy  String   @map("created_by") @db.Uuid
+
+  @@index([societyId, memberId, createdAt])
+  @@map("member_status_history")
+}
+
+model FamilyMember {
+  id         String   @id @default(uuid()) @db.Uuid
+  societyId  String   @map("society_id") @db.Uuid
+  givenName  String   @map("given_name")
+  familyName String   @map("family_name")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy  String   @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("family_members")
+}
+
+model MemberFamilyLink {
+  id             String   @id @default(uuid()) @db.Uuid
+  societyId      String   @map("society_id") @db.Uuid
+  memberId       String   @map("member_id") @db.Uuid
+  familyMemberId String   @map("family_member_id") @db.Uuid
+  relationshipCode String @map("relationship_code")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy      String   @map("created_by") @db.Uuid
+
+  @@unique([societyId, memberId, familyMemberId])
+  @@index([societyId])
+  @@map("member_family_links")
+}
+
+model Committee {
+  id        String   @id @default(uuid()) @db.Uuid
+  societyId String   @map("society_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String   @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("committees")
+}
+
+model CommitteeAppointment {
+  id          String    @id @default(uuid()) @db.Uuid
+  societyId   String    @map("society_id") @db.Uuid
+  committeeId String    @map("committee_id") @db.Uuid
+  memberId    String    @map("member_id") @db.Uuid
+  roleTitle   String    @map("role_title")
+  startsOn    DateTime  @map("starts_on") @db.Date
+  endsOn      DateTime? @map("ends_on") @db.Date
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy   String    @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("committee_appointments")
+}
+
+model Meeting {
+  id          String   @id @default(uuid()) @db.Uuid
+  societyId   String   @map("society_id") @db.Uuid
+  committeeId String   @map("committee_id") @db.Uuid
+  title       String
+  heldOn      DateTime @map("held_on") @db.Date
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy   String   @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("meetings")
+}
+
+model Resolution {
+  id        String   @id @default(uuid()) @db.Uuid
+  societyId String   @map("society_id") @db.Uuid
+  meetingId String   @map("meeting_id") @db.Uuid
+  title     String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String   @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("resolutions")
+}
+
+model GovernanceDocument {
+  id         String   @id @default(uuid()) @db.Uuid
+  societyId  String   @map("society_id") @db.Uuid
+  title      String
+  language   String
+  storageKey String   @map("storage_key")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy  String   @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("governance_documents")
+}
+
+model WelfareScheme {
+  id        String   @id @default(uuid()) @db.Uuid
+  societyId String   @map("society_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String   @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("welfare_schemes")
+}
+
+model WelfareSchemeVersion {
+  id            String   @id @default(uuid()) @db.Uuid
+  societyId     String   @map("society_id") @db.Uuid
+  schemeId      String   @map("scheme_id") @db.Uuid
+  versionNo     Int      @map("version_no")
+  ruleBody      Json     @default("{}") @map("rule_body")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy     String   @map("created_by") @db.Uuid
+
+  @@unique([schemeId, versionNo])
+  @@index([societyId])
+  @@map("welfare_scheme_versions")
+}
+
+model Claim {
+  id                String   @id @default(uuid()) @db.Uuid
+  societyId         String   @map("society_id") @db.Uuid
+  memberId          String   @map("member_id") @db.Uuid
+  familyMemberId    String?  @map("family_member_id") @db.Uuid
+  schemeVersionId   String   @map("scheme_version_id") @db.Uuid
+  idempotencyKey    String   @map("idempotency_key")
+  eligibilityStatus String   @default("not_calculated") @map("eligibility_status")
+  status            String   @default("submitted")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy         String   @map("created_by") @db.Uuid
+
+  @@unique([societyId, idempotencyKey])
+  @@index([societyId, createdAt])
+  @@map("claims")
+}
+
+model ClaimEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  societyId String   @map("society_id") @db.Uuid
+  claimId   String   @map("claim_id") @db.Uuid
+  eventType String   @map("event_type")
+  note      String   @default("")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String   @map("created_by") @db.Uuid
+
+  @@index([societyId, claimId])
+  @@map("claim_events")
+}
+
+model ApprovalRoute {
+  id           String   @id @default(uuid()) @db.Uuid
+  societyId    String   @map("society_id") @db.Uuid
+  name         String
+  policyStatus String   @default("stored_not_in_force") @map("policy_status")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy    String   @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("approval_routes")
+}
+
+model ApprovalRouteStage {
+  id         String  @id @default(uuid()) @db.Uuid
+  societyId  String  @map("society_id") @db.Uuid
+  routeId    String  @map("route_id") @db.Uuid
+  stageNo    Int     @map("stage_no")
+  roleCode   String  @map("role_code")
+  amountNote String? @map("amount_note")
+
+  @@unique([routeId, stageNo])
+  @@index([societyId])
+  @@map("approval_route_stages")
+}
+
+model ApprovalRequest {
+  id         String   @id @default(uuid()) @db.Uuid
+  societyId  String   @map("society_id") @db.Uuid
+  objectType String   @map("object_type")
+  objectId   String   @map("object_id") @db.Uuid
+  routeId    String?  @map("route_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy  String   @map("created_by") @db.Uuid
+
+  @@index([societyId, objectType, objectId])
+  @@map("approval_requests")
+}
+
+model ApprovalDecision {
+  id        String   @id @default(uuid()) @db.Uuid
+  societyId String   @map("society_id") @db.Uuid
+  requestId String   @map("request_id") @db.Uuid
+  stageNo   Int      @map("stage_no")
+  decision  String
+  reason    String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String   @map("created_by") @db.Uuid
+
+  @@index([societyId, requestId])
+  @@map("approval_decisions")
+}
+
+model Account {
+  id          String   @id @default(uuid()) @db.Uuid
+  societyId   String   @map("society_id") @db.Uuid
+  code        String
+  name        String
+  accountType String   @map("account_type")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy   String   @map("created_by") @db.Uuid
+
+  @@unique([societyId, code])
+  @@index([societyId])
+  @@map("accounts")
+}
+
+model Fund {
+  id        String   @id @default(uuid()) @db.Uuid
+  societyId String   @map("society_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String   @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("funds")
+}
+
+model FiscalPeriod {
+  id        String   @id @default(uuid()) @db.Uuid
+  societyId String   @map("society_id") @db.Uuid
+  name      String
+  startsOn  DateTime @map("starts_on") @db.Date
+  endsOn    DateTime @map("ends_on") @db.Date
+  status    String   @default("open")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String   @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("fiscal_periods")
+}
+
+model JournalDocument {
+  id                 String    @id @default(uuid()) @db.Uuid
+  societyId          String    @map("society_id") @db.Uuid
+  periodId           String    @map("period_id") @db.Uuid
+  status             String    @default("draft")
+  reason             String
+  reversesDocumentId String?   @map("reverses_document_id") @db.Uuid
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy          String    @map("created_by") @db.Uuid
+  postedAt           DateTime? @map("posted_at") @db.Timestamptz(6)
+  postedBy           String?   @map("posted_by") @db.Uuid
+
+  @@index([societyId, status])
+  @@map("journal_documents")
+}
+
+model JournalLine {
+  id         String  @id @default(uuid()) @db.Uuid
+  societyId  String  @map("society_id") @db.Uuid
+  documentId String  @map("document_id") @db.Uuid
+  accountId  String  @map("account_id") @db.Uuid
+  fundId     String? @map("fund_id") @db.Uuid
+  debit      Decimal @default(0) @db.Decimal(19, 4)
+  credit     Decimal @default(0) @db.Decimal(19, 4)
+
+  @@index([societyId, documentId])
+  @@map("journal_lines")
+}
+
+model LoanProduct {
+  id        String   @id @default(uuid()) @db.Uuid
+  societyId String   @map("society_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String   @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("loan_products")
+}
+
+model LoanProductVersion {
+  id        String   @id @default(uuid()) @db.Uuid
+  societyId String   @map("society_id") @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  versionNo Int      @map("version_no")
+  ruleBody  Json     @default("{}") @map("rule_body")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String   @map("created_by") @db.Uuid
+
+  @@unique([productId, versionNo])
+  @@index([societyId])
+  @@map("loan_product_versions")
+}
+
+model LoanApplication {
+  id               String   @id @default(uuid()) @db.Uuid
+  societyId        String   @map("society_id") @db.Uuid
+  memberId         String   @map("member_id") @db.Uuid
+  productVersionId String   @map("product_version_id") @db.Uuid
+  status           String   @default("recorded")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy        String   @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("loan_applications")
+}
+
+model Project {
+  id        String    @id @default(uuid()) @db.Uuid
+  societyId String    @map("society_id") @db.Uuid
+  name      String
+  category  String
+  startsOn  DateTime? @map("starts_on") @db.Date
+  endsOn    DateTime? @map("ends_on") @db.Date
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String    @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("projects")
+}
+
+model ProjectParticipant {
+  id             String  @id @default(uuid()) @db.Uuid
+  societyId      String  @map("society_id") @db.Uuid
+  projectId      String  @map("project_id") @db.Uuid
+  memberId       String  @map("member_id") @db.Uuid
+  familyMemberId String? @map("family_member_id") @db.Uuid
+
+  @@index([societyId, projectId])
+  @@map("project_participants")
+}
+
+model ProjectTask {
+  id        String @id @default(uuid()) @db.Uuid
+  societyId String @map("society_id") @db.Uuid
+  projectId String @map("project_id") @db.Uuid
+  title     String
+  status    String @default("open")
+
+  @@index([societyId, projectId])
+  @@map("project_tasks")
+}
+
+model ProjectExpense {
+  id                String  @id @default(uuid()) @db.Uuid
+  societyId         String  @map("society_id") @db.Uuid
+  projectId         String  @map("project_id") @db.Uuid
+  description       String
+  amount            Decimal @db.Decimal(19, 4)
+  journalDocumentId String? @map("journal_document_id") @db.Uuid
+
+  @@index([societyId, projectId])
+  @@map("project_expenses")
+}
+
+model Suggestion {
+  id        String  @id @default(uuid()) @db.Uuid
+  societyId String  @map("society_id") @db.Uuid
+  memberId  String  @map("member_id") @db.Uuid
+  body      String
+  status    String  @default("submitted")
+  projectId String? @map("project_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String  @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("suggestions")
+}
+
+model SuggestionEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  societyId    String   @map("society_id") @db.Uuid
+  suggestionId String   @map("suggestion_id") @db.Uuid
+  status       String
+  note         String   @default("")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy    String   @map("created_by") @db.Uuid
+
+  @@index([societyId, suggestionId])
+  @@map("suggestion_events")
+}
+
+model EmergencyRequest {
+  id                String   @id @default(uuid()) @db.Uuid
+  societyId         String   @map("society_id") @db.Uuid
+  memberId          String   @map("member_id") @db.Uuid
+  requestType       String   @map("request_type")
+  phone             String
+  description       String
+  idempotencyKey    String   @map("idempotency_key")
+  locationPermitted Boolean  @default(false) @map("location_permitted")
+  status            String   @default("open")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy         String   @map("created_by") @db.Uuid
+
+  @@unique([societyId, idempotencyKey])
+  @@index([societyId, createdAt])
+  @@map("emergency_requests")
+}
+
+model EmergencyUpdate {
+  id        String   @id @default(uuid()) @db.Uuid
+  societyId String   @map("society_id") @db.Uuid
+  requestId String   @map("request_id") @db.Uuid
+  note      String
+  status    String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String   @map("created_by") @db.Uuid
+
+  @@index([societyId, requestId])
+  @@map("emergency_updates")
+}
+
+model EsgGoal {
+  id        String   @id @default(uuid()) @db.Uuid
+  societyId String   @map("society_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String   @map("created_by") @db.Uuid
+
+  @@index([societyId])
+  @@map("esg_goals")
+}
+
+model EsgKpiDefinition {
+  id          String   @id @default(uuid()) @db.Uuid
+  societyId   String   @map("society_id") @db.Uuid
+  goalId      String   @map("goal_id") @db.Uuid
+  name        String
+  unitLabel   String   @map("unit_label")
+  formulaBody Json     @default("{}") @map("formula_body")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy   String   @map("created_by") @db.Uuid
+
+  @@index([societyId, goalId])
+  @@map("esg_kpi_definitions")
+}
+
+model NotificationTemplate {
+  id        String   @id @default(uuid()) @db.Uuid
+  societyId String   @map("society_id") @db.Uuid
+  code      String
+  language  String
+  channel   String   @default("in_app")
+  body      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String   @map("created_by") @db.Uuid
+
+  @@unique([societyId, code, language])
+  @@index([societyId])
+  @@map("notification_templates")
+}
+
+model FileObject {
+  id         String   @id @default(uuid()) @db.Uuid
+  societyId  String   @map("society_id") @db.Uuid
+  objectType String   @map("object_type")
+  objectId   String   @map("object_id") @db.Uuid
+  storageKey String   @map("storage_key")
+  mediaType  String   @map("media_type")
+  byteSize   Int      @map("byte_size")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy  String   @map("created_by") @db.Uuid
+
+  @@index([societyId, objectType, objectId])
+  @@map("file_objects")
+}

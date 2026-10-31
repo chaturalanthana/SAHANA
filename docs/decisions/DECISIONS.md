@@ -1,0 +1,87 @@
+# SAHANA Decision Log
+
+Status: opened 31 October 2026 with the governance foundation.
+Rules for this file:
+
+- An **accepted** decision may be implemented.
+- A **proposed** decision may be implemented only after it is accepted, or after the owner waives it in writing for a named slice.
+- An **open** decision blocks the behavior it names. Storage that does not compute the rule may still be designed.
+- Do not treat an SRS example, a proposal-deck bullet, or an engineering preference as accepted.
+
+Owner names below are roles. Named people are filled when the society sponsor assigns them.
+
+## Confirmed decisions
+
+These come from the approved SRS baseline and the master build constraints. They do not close OD 01–OD 08.
+
+| ID | Decision | Source | Date | Owner | Modules |
+|---|---|---|---|---|---|
+| CD-01 | SAHANA is a PERN TypeScript modular monolith: PostgreSQL, Express, React web, Node.js API, React Native mobile. Both clients use one REST API. | SRS 032 | 2026-10-31 | Delivery lead | all |
+| CD-02 | English, Sinhala, and Tamil are required from the first release for UI, validation, notifications, and reports. Language does not change amounts, eligibility, or permissions. | SRS 004, SRS 005 | 2026-10-31 | Delivery lead | i18n, all UI |
+| CD-03 | Records, rules, funds, and permissions belong to one society. Cross-society access is forbidden until an explicit model is approved. | SRS 002, SRS 031 | 2026-10-31 | Platform administrator | tenancy, all |
+| CD-04 | One authoritative general ledger per society. Funds and projects are dimensions. Posted financial rows are immutable; corrections are reversals. | SRS 018, SRS 020 | 2026-10-31 | Treasurer | ledger |
+| CD-05 | Welfare and loan formulas are not implied by the baseline. Configuration stores approved rules; code does not invent them. | SRS 001, SRS 014, SRS 017 | 2026-10-31 | Society sponsor | welfare, loans |
+| CD-06 | Responsive web from 320px upward is P0. Mobile is online-first member self-service. Offline sync is out of MVP. | SRS 006, SRS 007 | 2026-10-31 | Delivery lead | web, mobile |
+| CD-07 | Only the primary employee receives a login in MVP. Family members are beneficiaries, not users. | Master prompt 6.4, consistent with SRS 003 leaving family logins open | 2026-10-31 | Society sponsor | identity, members |
+| CD-08 | Kiosk, committee voting, and functional WhatsApp are Phase 2. WhatsApp may appear as a disabled connect option. | SRS delivery priorities, SRS 023 | 2026-10-31 | Product lead | governance, notifications |
+| CD-09 | Emergency assistance must say it does not replace official emergency services. Location is optional and permissioned. | SRS 015, SRS 016 | 2026-10-31 | Welfare coordinator | emergency, mobile |
+| CD-10 | Capacity target is 100,000 members per society. The claim is valid only after a representative test is executed. | SRS 033 | 2026-10-31 | Delivery lead | platform |
+| CD-11 | Secrets are not editable in ordinary settings and must not appear in API responses, exports, or logs. | SRS 030 | 2026-10-31 | Platform administrator | config, security |
+| CD-12 | There is no payroll engine in this product. | Master prompt 6.8 | 2026-10-31 | Treasurer | loans, ledger |
+
+CD-07 is confirmed for MVP scope by the master prompt. SRS 003 still lists independent family logins as an open product question for later; that does not reopen logins inside MVP. If the sponsor wants family logins in MVP, that is a scope change under SRS 034.
+
+## Accepted technical decisions
+
+Accepted on 31 October 2026 by the project owner ("Accept. please proceed") so Milestone 0 can be built. OD 01 still forbids a shared member identity across societies. These rows do not decide that.
+
+| ID | Decision | Date | Owner | Modules |
+|---|---|---|---|---|
+| TD-01 | Shared-schema multi-tenancy. Every tenant table has `society_id`. The API scopes every tenant query. PostgreSQL row-level security is a second barrier. Schema-per-society and database-per-society stay rejected for Milestone 0. | 2026-10-31 | Project owner | tenancy, all tables |
+| TD-02 | Prisma owns schema and migrations. Raw SQL is allowed for row-level security and for later ledger posting. Posted financial rows stay immutable in the database; Prisma updates are not a license to edit them (NN-06). | 2026-10-31 | Project owner | api, ledger |
+| TD-03 | Mobile shell uses Expo (managed workflow) until a required native module forces prebuild. Supported OS versions remain OD 07. | 2026-10-31 | Project owner | mobile |
+| TD-04 | Web uses an HTTP-only session cookie. Mobile uses a short-lived access token and a rotating refresh token kept in secure device storage. | 2026-10-31 | Project owner | identity |
+| TD-05 | Bulk work will use a job interface, with Redis when hosting exists and an in-process adapter locally. Milestone 0 has no bulk job and does not add Redis. | 2026-10-31 | Project owner | jobs, notifications, reporting |
+
+Milestone 0 password hashing uses Argon2id, which is the hashing half of TD-07. That does not accept an MFA factor. The factor stays inside OD 07.
+
+## Proposed technical decisions
+
+Not accepted. Do not implement these until the row is accepted or waived.
+
+| ID | Proposal | Why it is not yet accepted | Owner | Modules | Blocks |
+|---|---|---|---|---|---|
+| TD-06 | Money stored as `numeric(19,4)`. Currency code on the society. No floating point. | Precision may change if the treasurer requires a different minor-unit rule under OD 03. | Treasurer | ledger | Milestone 3 posting |
+| TD-07 | Argon2id for password hashes. Privileged MFA required before production; mechanism selected with OD 07. | Factor type (app, SMS, hardware) is not chosen. Hashing is already in use for Milestone 0; MFA enforcement is not accepted by that usage. | Security lead | identity | Production login policy |
+
+## Open business decisions
+
+Copied from SRS section 8. Status remains **open**. No default formula is assigned.
+
+| ID | Decision required | Owner | Affects | Blocks |
+|---|---|---|---|---|
+| OD 01 | Society structure, multi-society access, member identity, family accounts, required profile fields, and membership lifecycle rules. | Society sponsor | governance, members, identity | Final member schema and any cross-society identity |
+| OD 02 | Contributions, welfare eligibility, family entitlements, waiting periods, limits, evidence, exceptions, and treatment of pending cases after a rule change. | Operations and welfare | welfare, claims | Any eligibility or benefit calculation |
+| OD 03 | Loan interest and fees, guarantors, repayment, arrears, settlement, and rescheduling; chart of accounts, fund rules, and opening balances. | Treasurer | loans, ledger | Interest math, default chart, opening balances |
+| OD 04 | Approval authorities, thresholds, delegation, separation of duties, and emergency acknowledgement and escalation targets. | Society sponsor | approvals, emergency | Production approval routes and emergency SLAs |
+| OD 05 | ESG definitions, baselines, units, verification owners, evidence standards, double-counting rules, and historical recalculation policy. | Project or ESG officer | esg, projects | Verified KPI calculations and carbon or certification claims |
+| OD 06 | Translation ownership and review, fallback language, report templates, notification providers, and consent or retention requirements. | Operations and product lead | i18n, notifications, reporting | SMS, email, push provider choice; legal retention periods |
+| OD 07 | Hosting, supported devices and operating systems, integrations, concurrency and performance targets, backup and recovery objectives. | Delivery lead | platform, security | Production deploy, load-test pass criteria, MFA factor |
+| OD 08 | Migration sources and quality, MVP delivery sequence, stakeholder acceptance owners, and any Phase 2 scope changes. | Product lead | reporting, program plan | Treating the milestone order as final; legacy import mappings |
+
+## Conflicts to watch
+
+- SRS 003 leaves family logins open. CD-07 closes them for MVP only. A request to add family accounts in the first release is a scope change, not a bug fix.
+- The October 2026 proposal deck lists PDPA compliance as a mark on the architecture slide. SRS 031 requires agreed controls and forbids claiming legal compliance without formal verification. PDPA is a design constraint, not a certification this repository can assert.
+- The proposal deck's committee titles (Chief organizer, President, Secretary, Treasurer, Vice President, Assistant Secretary, Advisory Committee, Working Committee) are the CBL example. SRS 008 requires configurable committee roles. Do not hardcode that list as the only structure.
+
+## Direction recorded on 31 October 2026
+
+The project owner directed the remaining MVP modules to be built and deferred creating the git remote. OD 01–OD 08 stay open. That direction allows storage, lists, and workflow state. It does not accept a welfare, contribution, loan, approval-threshold, or ESG formula. Code must not treat an empty rule body as eligible, as zero interest, or as a verified ESG result. Committee voting, a kiosk, WhatsApp sending, offline sync, and a payroll engine stay out.
+
+## How to accept a decision
+
+1. Write the outcome in the relevant table: status, date, owner, and the modules that may now rely on it.
+2. Move the row from Open or Proposed to Confirmed, or add an Accepted date column value in the narrative under the table.
+3. Update the traceability matrix status for every row that was blocked only by that decision.
+4. Only then implement the calculation or the technology choice.
