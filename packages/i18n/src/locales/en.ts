@@ -38,11 +38,22 @@ export const en = {
   shell: {
     nav: {
       menu: 'Menu',
+      collapse: 'Collapse menu',
+      expand: 'Expand menu',
       config: 'Configuration',
       home: 'Home',
     },
     user: {
       menu: 'Account',
+    },
+    mfa: {
+      title: 'Sign-in code',
+      start: 'Set up a sign-in code',
+      code: '6-digit code',
+      confirm: 'Confirm code',
+      saved: 'Sign-in code is on',
+      already: 'A sign-in code is already on for this account',
+      hint: 'Store the setup link in an authenticator app, then enter the current code. This does not replace your password.',
     },
     environment: {
       banner: 'Environment',
@@ -95,6 +106,9 @@ export const en = {
     rateLimited: 'Too many attempts. Try again later.',
   },
   modules: {
+    kpi: {
+      records: 'Records',
+    },
     notice:
       'These records are stored for the society. Welfare eligibility, loan interest, approval thresholds, and ESG results are not calculated.',
     saved: 'Saved',

@@ -4,10 +4,10 @@ type StatusPillProps = {
 };
 
 const toneClass: Record<NonNullable<StatusPillProps['tone']>, string> = {
-  info: 'bg-info/10 text-info',
-  warning: 'bg-warning/10 text-warning',
-  success: 'bg-success/10 text-success',
-  danger: 'bg-danger/10 text-danger',
+  info: 'bg-info/15 text-info-ink',
+  warning: 'bg-warning/20 text-warning-ink',
+  success: 'bg-success/15 text-success-ink',
+  danger: 'bg-danger/15 text-danger-ink',
 };
 
 export function StatusPill({ label, tone = 'info' }: StatusPillProps) {

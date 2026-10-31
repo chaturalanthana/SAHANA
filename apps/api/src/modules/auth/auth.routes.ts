@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import { languageBodySchema, loginBodySchema, refreshBodySchema, switchSocietySchema } from '@sahana/validation';
+import { languageBodySchema, loginBodySchema, mfaCodeSchema, refreshBodySchema, switchSocietySchema } from '@sahana/validation';
 import { ZodError } from 'zod';
 import { ApiError } from '../../errors';
 import {
@@ -11,6 +11,7 @@ import {
   switchSociety,
   updatePreferredLanguage,
 } from './auth.service';
+import { confirmMfa, enrollMfa } from './mfa';
 
 function clientKind(req: Request): 'web' | 'mobile' {
   return req.actor?.clientKind ?? 'web';
@@ -79,6 +80,37 @@ export async function getMe(req: Request, res: Response, next: NextFunction): Pr
       society: req.actor.society,
       permissions: req.actor.permissions,
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function postMfaEnroll(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.actor) throw new ApiError(401, 'unauthorized', 'errors.unauthorized');
+    const enrolled = await enrollMfa({
+      userId: req.actor.userId,
+      societyId: req.actor.societyId,
+      email: req.actor.user.email,
+      traceId: req.traceId,
+    });
+    res.status(201).json(enrolled);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function postMfaConfirm(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    if (!req.actor) throw new ApiError(401, 'unauthorized', 'errors.unauthorized');
+    const body = mfaCodeSchema.parse(req.body);
+    await confirmMfa({
+      userId: req.actor.userId,
+      societyId: req.actor.societyId,
+      code: body.code,
+      traceId: req.traceId,
+    });
+    res.status(204).end();
   } catch (error) {
     next(error);
   }

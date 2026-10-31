@@ -64,6 +64,22 @@ paths:
       responses:
         '200':
           description: Session profile
+  /me/mfa/enroll:
+    post:
+      summary: Start TOTP enrollment and return a one-time setup URI
+      responses:
+        '201':
+          description: Setup URI. The secret is not written to the audit log.
+        '409':
+          description: A factor is already confirmed
+  /me/mfa/confirm:
+    post:
+      summary: Confirm the current TOTP code
+      responses:
+        '204':
+          description: Factor stored
+        '400':
+          description: Code did not match
   /me/language:
     post:
       summary: Remember the user language

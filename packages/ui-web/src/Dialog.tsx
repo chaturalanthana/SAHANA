@@ -16,14 +16,14 @@ export function Dialog({ open, title, closeLabel, children, onClose }: DialogPro
         role="dialog"
         aria-modal="true"
         aria-labelledby="sahana-dialog-title"
-        className="w-full max-w-md rounded-lg bg-surface p-4 shadow-lg"
+        className="sahana-card w-full max-w-md p-4"
       >
         <h2 id="sahana-dialog-title" className="text-base font-semibold text-text">
           {title}
         </h2>
         <div className="mt-3 text-sm text-text">{children}</div>
         <div className="mt-4 flex justify-end">
-          <button type="button" className="min-h-11 px-3 text-sm text-primary" onClick={onClose}>
+          <button type="button" className="min-h-11 px-3 text-sm text-primary-ink" onClick={onClose}>
             {closeLabel}
           </button>
         </div>

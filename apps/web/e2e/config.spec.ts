@@ -21,8 +21,10 @@ test('signs in and saves a society contact phone', async ({ page }) => {
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('status')).toHaveText('Saved');
 
+  await page.locator('[data-language-menu]').click();
   await page.locator('[data-locale="si"]').click();
   await expect(page.getByRole('heading', { name: 'වින්‍යාසය' })).toBeVisible();
+  await page.locator('[data-language-menu]').click();
   await page.locator('[data-locale="ta"]').click();
   await expect(page.getByRole('heading', { name: 'அமைப்பு' })).toBeVisible();
 });

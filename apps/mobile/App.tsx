@@ -130,7 +130,7 @@ export default function App() {
                 accessibilityRole="button"
                 onPress={() => setLocale(code)}
                 style={{
-                  color: locale === code ? color.primary : color.muted,
+                  color: locale === code ? color.primaryInk : color.body,
                   fontSize: fontSize.dense,
                   lineHeight: fontSize.dense * lineHeight.body,
                   paddingVertical: space[2],
@@ -164,7 +164,7 @@ export default function App() {
                 <TextField label={t('modules.field.requestType')} value={requestType} onChangeText={setRequestType} />
                 <TextField label={t('modules.field.phone')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
                 <TextField label={t('modules.field.description')} value={description} onChangeText={setDescription} />
-                {error ? <Text style={{ color: color.danger }}>{error}</Text> : null}
+                {error ? <Text style={{ color: color.dangerInk }}>{error}</Text> : null}
                 <Button label={t('common.action.save')} loading={pending} onPress={() => void submitEmergency()} />
               </View>
             )}
@@ -186,7 +186,7 @@ export default function App() {
               value={password}
               onChangeText={setPassword}
             />
-            {error ? <Text style={{ color: color.danger }}>{error}</Text> : null}
+            {error ? <Text style={{ color: color.dangerInk }}>{error}</Text> : null}
             <Button label={t('auth.signIn.submit')} loading={pending} onPress={() => void signIn()} />
           </View>
         )}

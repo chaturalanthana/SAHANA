@@ -35,7 +35,7 @@ function LazyRecords({ title, path }: { title: string; path: string }) {
       </button>
       {open && query.data ? (
         query.data.items.length === 0 ? (
-          <p className="mt-2 text-sm text-muted">{t('common.state.empty')}</p>
+          <p className="mt-2 text-sm text-body">{t('common.state.empty')}</p>
         ) : (
           <ul className="mt-2 flex flex-col gap-2">
             {query.data.items.map((item) => (
@@ -99,8 +99,8 @@ export function MemberPage() {
     onError: () => setError(t('errors.generic')),
   });
 
-  if (member.isLoading) return <p className="text-sm text-muted">{t('common.state.loading')}</p>;
-  if (!member.data) return <p className="text-sm text-danger">{t('errors.generic')}</p>;
+  if (member.isLoading) return <p className="text-sm text-body">{t('common.state.loading')}</p>;
+  if (!member.data) return <p className="text-sm text-danger-ink">{t('errors.generic')}</p>;
   const profile = member.data;
 
   return (
@@ -116,7 +116,7 @@ export function MemberPage() {
         <p className="text-sm break-words">{profile.statusCode}</p>
         <p className="text-sm break-words">{profile.categoryCode}</p>
       </header>
-      <p className="rounded-md bg-warning/15 px-3 py-2 text-sm text-warning">{t('modules.notice')}</p>
+      <p className="rounded-md bg-warning/20 px-3 py-2 text-sm text-warning-ink">{t('modules.notice')}</p>
 
       <section className="flex flex-col gap-3" aria-label={t('modules.member.history')}>
         <h2 className="text-base font-semibold">{t('modules.member.history')}</h2>
@@ -161,7 +161,7 @@ export function MemberPage() {
       <section className="flex flex-col gap-3" aria-label={t('modules.member.family')}>
         <h2 className="text-base font-semibold">{t('modules.member.family')}</h2>
         <ul className="flex flex-col gap-2">
-          {family.data?.items.length === 0 ? <li className="text-sm text-muted">{t('common.state.empty')}</li> : null}
+          {family.data?.items.length === 0 ? <li className="text-sm text-body">{t('common.state.empty')}</li> : null}
           {family.data?.items.map((item) => (
             <li key={item.id} className="rounded-md border border-border bg-surface p-3 text-sm break-words">
               {item.givenName} {item.familyName} · {item.relationshipCode}
@@ -207,7 +207,7 @@ export function MemberPage() {
 
       <section className="rounded-md border border-border bg-surface p-3">
         <h2 className="text-base font-semibold">{t('modules.member.contributions')}</h2>
-        <p className="mt-2 text-sm text-muted">{t('modules.member.notCalculatedSection')}</p>
+        <p className="mt-2 text-sm text-body">{t('modules.member.notCalculatedSection')}</p>
       </section>
 
       {can('welfare.read') ? <LazyRecords title={t('modules.member.welfare')} path={`/api/v1/members/${id}/claims`} /> : null}
@@ -215,17 +215,17 @@ export function MemberPage() {
       {can('projects.read') ? <LazyRecords title={t('modules.member.projects')} path={`/api/v1/members/${id}/projects`} /> : null}
       <section className="rounded-md border border-border bg-surface p-3">
         <h2 className="text-base font-semibold">{t('modules.member.documents')}</h2>
-        <p className="mt-2 text-sm text-muted">{t('common.state.empty')}</p>
+        <p className="mt-2 text-sm text-body">{t('common.state.empty')}</p>
       </section>
       <section className="rounded-md border border-border bg-surface p-3">
         <h2 className="text-base font-semibold">{t('modules.member.notifications')}</h2>
-        <p className="mt-2 text-sm text-muted">{t('common.state.empty')}</p>
+        <p className="mt-2 text-sm text-body">{t('common.state.empty')}</p>
       </section>
       {can('emergency.read') ? (
         <LazyRecords title={t('modules.nav.emergency')} path={`/api/v1/members/${id}/emergency-requests`} />
       ) : null}
 
-      {error ? <p className="text-sm text-danger">{error}</p> : null}
+      {error ? <p className="text-sm text-danger-ink">{error}</p> : null}
       <Toast message={message} />
     </div>
   );

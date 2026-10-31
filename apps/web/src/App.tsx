@@ -1,4 +1,6 @@
+import { useEffect, useRef } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { isLocale } from '@sahana/i18n';
 import { SessionProvider, useSession } from './session';
 import { Shell } from './shell/Shell';
 import { ConfigPage } from './pages/ConfigPage';
@@ -7,15 +9,37 @@ import { WorkspacePage } from './pages/WorkspacePage';
 import { LoginPage } from './pages/LoginPage';
 import { useI18n } from './i18n';
 
+function LocaleSync() {
+  const session = useSession();
+  const { setLocale } = useI18n();
+  const synced = useRef<string | null>(null);
+  const preferred = session.me?.user.preferredLanguage;
+  const societyDefault = session.config?.defaultLanguage;
+  useEffect(() => {
+    const userId = session.me?.user.id;
+    if (!userId || synced.current === userId) return;
+    if (preferred && isLocale(preferred)) {
+      setLocale(preferred);
+      synced.current = userId;
+      return;
+    }
+    if (!session.config) return;
+    if (isLocale(societyDefault)) setLocale(societyDefault);
+    synced.current = userId;
+  }, [preferred, session.config, session.me?.user.id, setLocale, societyDefault]);
+  return null;
+}
+
 function Protected() {
   const session = useSession();
   const { t } = useI18n();
   if (session.isLoading) {
-    return <p className="p-6 text-sm text-muted">{t('common.state.loading')}</p>;
+    return <p className="p-6 text-sm text-body">{t('common.state.loading')}</p>;
   }
   if (!session.me) return <Navigate to="/login" replace />;
   return (
     <Shell>
+      <LocaleSync />
       <Routes>
         <Route path="/config" element={<ConfigPage />} />
         <Route path="/members" element={<WorkspacePage sectionKey="members" />} />

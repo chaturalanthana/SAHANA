@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ConfigChange, PublicConfig } from '@sahana/types';
 import { CRITICAL_CONFIG_KEYS, PUBLIC_CONFIG_KEYS } from '@sahana/validation';
-import { Button, StatusPill, TextField, Toast } from '@sahana/ui-web';
+import { Button, Card, KpiCard, StatusPill, TextField, Toast } from '@sahana/ui-web';
 import { useI18n } from '../i18n';
 import { client, useSession } from '../session';
 
@@ -63,20 +63,26 @@ export function ConfigPage() {
   });
 
   if (!session.config) {
-    return <p className="text-sm text-muted">{t('common.state.loading')}</p>;
+    return <p className="text-sm text-body">{t('common.state.loading')}</p>;
   }
 
   const canWrite = session.me?.permissions.includes('config.write') ?? false;
   const canApprove = session.me?.permissions.includes('config.approve') ?? false;
 
   if (!session.config || !draft) {
-    return <p className="text-sm text-muted">{t('common.state.loading')}</p>;
+    return <p className="text-sm text-body">{t('common.state.loading')}</p>;
   }
 
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="text-xl font-semibold">{t('config.title')}</h1>
-      <p className="mt-1 text-sm text-muted">{t('config.description')}</p>
+      <h1 className="text-xl font-semibold text-heading">{t('config.title')}</h1>
+      <p className="mt-1 text-sm text-body">{t('config.description')}</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <KpiCard label={t('config.field.displayName')} value={session.config.displayName} />
+        <KpiCard label={t('config.field.defaultLanguage')} value={session.config.defaultLanguage} />
+        <KpiCard label={t('config.field.currencyCode')} value={session.config.currencyCode} />
+      </div>
+      <Card className="mt-4">
       <form
         className="mt-4 grid gap-3"
         onSubmit={(event) => {
@@ -119,7 +125,7 @@ export function ConfigPage() {
           />
         ) : null}
         {error ? (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-sm text-danger-ink">
             {error}
           </p>
         ) : null}
@@ -131,11 +137,13 @@ export function ConfigPage() {
           </div>
         ) : null}
       </form>
+      </Card>
 
-      <section className="mt-8">
+      <Card className="mt-4">
+      <section>
         <h2 className="text-base font-semibold">{t('config.critical.pending')}</h2>
         {changes.data && changes.data.items.length === 0 ? (
-          <p className="mt-2 text-sm text-muted">{t('common.state.empty')}</p>
+          <p className="mt-2 text-sm text-body">{t('common.state.empty')}</p>
         ) : null}
         <ul className="mt-2 flex flex-col gap-2">
           {changes.data?.items.map((item) => {
@@ -146,7 +154,7 @@ export function ConfigPage() {
                   <StatusPill label={t(`config.field.${item.key}`)} tone="warning" />
                   <span>{item.value}</span>
                 </div>
-                <p className="mt-1 text-muted">{item.reason}</p>
+                <p className="mt-1 text-body">{item.reason}</p>
                 {mine ? <p className="mt-2">{t('config.critical.selfApproval')}</p> : null}
                 {canApprove && !mine ? (
                   <Button type="button" className="mt-2" onClick={() => approve.mutate(item.id)}>
@@ -162,7 +170,7 @@ export function ConfigPage() {
       <section className="mt-8">
         <h2 className="text-base font-semibold">{t('config.consent.title')}</h2>
         {consent.data && consent.data.documents.length === 0 ? (
-          <p className="mt-2 text-sm text-muted">{t('config.consent.empty')}</p>
+          <p className="mt-2 text-sm text-body">{t('config.consent.empty')}</p>
         ) : (
           <ul className="mt-2 text-sm">
             {consent.data?.documents.map((document) => (
@@ -171,6 +179,7 @@ export function ConfigPage() {
           </ul>
         )}
       </section>
+      </Card>
       <Toast message={message} />
     </div>
   );

@@ -9,7 +9,16 @@ import { ApiError, zodFields } from './errors';
 import { log } from './logger';
 import { prisma } from './db';
 import { attachActor, requireAuth } from './middleware/auth';
-import { getMe, postLanguage, postLogin, postLogout, postRefresh, postSwitchSociety } from './modules/auth/auth.routes';
+import {
+  getMe,
+  postLanguage,
+  postLogin,
+  postLogout,
+  postMfaConfirm,
+  postMfaEnroll,
+  postRefresh,
+  postSwitchSociety,
+} from './modules/auth/auth.routes';
 import { getChanges, getConfig, getConsent, postApprove, putConfig } from './modules/config/config.routes';
 import { getAudit, getUsers } from './modules/directory/directory.routes';
 import {
@@ -124,6 +133,8 @@ export function createApp() {
   app.post('/api/v1/auth/logout', requireAuth, postLogout);
   app.get('/api/v1/me', requireAuth, getMe);
   app.post('/api/v1/me/language', requireAuth, postLanguage);
+  app.post('/api/v1/me/mfa/enroll', requireAuth, postMfaEnroll);
+  app.post('/api/v1/me/mfa/confirm', requireAuth, postMfaConfirm);
   app.post('/api/v1/session/society', requireAuth, postSwitchSociety);
   app.get('/api/v1/config', requireAuth, getConfig);
   app.put('/api/v1/config/:key', requireAuth, putConfig);

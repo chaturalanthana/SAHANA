@@ -8,9 +8,9 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 const variantClass: Record<NonNullable<ButtonProps['variant']>, string> = {
   primary: 'bg-primary text-primary-text hover:opacity-90',
-  secondary: 'bg-surface text-text border border-border hover:bg-bg',
-  quiet: 'bg-transparent text-primary hover:bg-bg',
-  danger: 'bg-danger text-primary-text hover:opacity-90',
+  secondary: 'bg-surface text-body border border-border hover:bg-bg',
+  quiet: 'bg-transparent text-primary-ink hover:bg-bg',
+  danger: 'bg-danger-ink text-surface hover:opacity-90',
 };
 
 export function Button({

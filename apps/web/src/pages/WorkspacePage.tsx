@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, TextField, Toast } from '@sahana/ui-web';
+import { Button, Card, DataTable, KpiCard, TextField, Toast } from '@sahana/ui-web';
 import { useI18n } from '../i18n';
 import { client, useSession } from '../session';
 
@@ -120,7 +120,7 @@ export function WorkspacePage({ sectionKey }: { sectionKey: string }) {
   const list = useQuery({
     queryKey: [section?.listPath],
     enabled: Boolean(section),
-    queryFn: () => client.request<{ items: Record<string, unknown>[] }>(section?.listPath ?? ''),
+    queryFn: () => client.request<{ items: Record<string, unknown>[]; total?: number }>(section?.listPath ?? ''),
   });
   const save = useMutation({
     mutationFn: () => {
@@ -139,11 +139,15 @@ export function WorkspacePage({ sectionKey }: { sectionKey: string }) {
   if (!section) return null;
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <h1 className="text-xl font-semibold">{t(section.titleKey)}</h1>
-      <p className="mt-1 text-sm text-muted">{t(section.hintKey)}</p>
-      <p className="mt-3 rounded-md bg-warning/15 px-3 py-2 text-sm text-warning">{t('modules.notice')}</p>
+    <div className="mx-auto max-w-5xl">
+      <h1 className="text-xl font-semibold text-heading">{t(section.titleKey)}</h1>
+      <p className="mt-1 text-sm text-body">{t(section.hintKey)}</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <KpiCard label={t('modules.kpi.records')} value={list.data ? String(list.data.total ?? list.data.items.length) : '—'} />
+      </div>
+      <p className="mt-3 rounded-md bg-warning/20 px-3 py-2 text-sm text-warning-ink">{t('modules.notice')}</p>
       {canWrite && section.createPath ? (
+        <Card className="mt-4">
         <form
           className="mt-4 grid gap-3"
           onSubmit={(event) => {
@@ -162,28 +166,32 @@ export function WorkspacePage({ sectionKey }: { sectionKey: string }) {
               required
             />
           ))}
-          {error ? <p className="text-sm text-danger">{error}</p> : null}
+          {error ? <p className="text-sm text-danger-ink">{error}</p> : null}
           <div>
             <Button type="submit" loading={save.isPending}>
               {t('common.action.save')}
             </Button>
           </div>
         </form>
+        </Card>
       ) : null}
-      <ul className="mt-6 flex flex-col gap-2">
-        {list.data?.items.length === 0 ? <li className="text-sm text-muted">{t('common.state.empty')}</li> : null}
-        {list.data?.items.map((item) => (
-          <li key={String(item.id)} className="rounded-md border border-border bg-surface p-3 text-sm break-words">
-            {sectionKey === 'members' ? (
-              <Link className="underline" to={`/members/${String(item.id)}`}>
-                {summary(item)}
-              </Link>
-            ) : (
-              summary(item)
-            )}
-          </li>
-        ))}
-      </ul>
+      <Card className="mt-4">
+        {list.data?.items.length === 0 ? <p className="text-sm text-body">{t('common.state.empty')}</p> : null}
+        <DataTable
+          columns={[{ key: 'summary', header: t(section.titleKey) }]}
+          rows={(list.data?.items ?? []).map((item) => ({
+            id: String(item.id),
+            summary:
+              sectionKey === 'members' ? (
+                <Link className="text-primary-ink underline" to={`/members/${String(item.id)}`}>
+                  {summary(item)}
+                </Link>
+              ) : (
+                summary(item)
+              ),
+          }))}
+        />
+      </Card>
       <Toast message={message} />
     </div>
   );
