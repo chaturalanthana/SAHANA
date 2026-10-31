@@ -17,6 +17,7 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('');
+  const [societyName, setSocietyName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [requestType, setRequestType] = useState('');
@@ -52,7 +53,19 @@ export default function App() {
       await SecureStore.setItemAsync(REFRESH_KEY, result.refreshToken);
       setAccessToken(result.accessToken);
       setDisplayName(result.user.displayName);
+      setSocietyName(result.society.name);
       if (isLocale(result.user.preferredLanguage)) setLocale(result.user.preferredLanguage);
+      else {
+        try {
+          const config = await createApiClient({
+            baseUrl: apiUrl,
+            getAccessToken: () => result.accessToken ?? null,
+          }).request<{ defaultLanguage?: string }>('/api/v1/config');
+          if (isLocale(config.defaultLanguage)) setLocale(config.defaultLanguage);
+        } catch {
+          // The signed-in shell still works if configuration cannot be read.
+        }
+      }
       try {
         const mine = await createApiClient({
           baseUrl: apiUrl,
@@ -128,7 +141,15 @@ export default function App() {
               <Text
                 key={code}
                 accessibilityRole="button"
-                onPress={() => setLocale(code)}
+                onPress={() => {
+                  setLocale(code);
+                  if (accessToken) {
+                    void client.request('/api/v1/me/language', {
+                      method: 'POST',
+                      body: JSON.stringify({ language: code }),
+                    });
+                  }
+                }}
                 style={{
                   color: locale === code ? color.primaryInk : color.body,
                   fontSize: fontSize.dense,
@@ -144,6 +165,7 @@ export default function App() {
         {accessToken ? (
           <View style={{ gap: space[4] }}>
             <Text style={{ fontSize: fontSize.body, color: color.text }}>{displayName}</Text>
+            {societyName ? <Text style={{ color: color.body, fontSize: fontSize.dense }}>{societyName}</Text> : null}
             <Text style={{ color: color.text, fontSize: fontSize.dense, lineHeight: fontSize.dense * lineHeight.body }}>
               {t('shell.emergency.notASubstitute')}
             </Text>

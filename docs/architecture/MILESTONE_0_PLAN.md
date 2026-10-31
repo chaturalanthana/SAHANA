@@ -1,6 +1,6 @@
 # Milestone 0 Implementation Plan
 
-Status: **approved** on 31 October 2026 by the project owner. TD-01 through TD-05 are accepted in `docs/decisions/DECISIONS.md`. Implementation follows this plan. Redis is not part of this milestone (TD-05). This plan is not **implemented**: acceptance criterion 1 still needs a GitHub Actions run, and the mobile shell has not been signed in on a device.
+Status: **approved** on 31 October 2026 by the project owner. TD-01 through TD-05 are accepted in `docs/decisions/DECISIONS.md`. Implementation follows this plan. Redis is not part of this milestone (TD-05). Local foundation checks passed on 31 October 2026, including TOTP enrollment and language persistence. The plan is not marked **implemented** until the pull request workflow repeats `pnpm i18n:check`, lint, typecheck, and test. A physical device sign-in was not run; the mobile shell typechecks and calls the same login API the API tests cover.
 Date: 31 October 2026.
 Depends on: `docs/ai/IMPLEMENTATION_PLAN.md`, `docs/architecture/DATABASE_ARCHITECTURE.md`, `docs/decisions/DECISIONS.md`.
 
@@ -152,7 +152,8 @@ These commands were run on the developer machine. They are not a GitHub Actions 
 | `pnpm i18n:check` | Passed. 54 keys in English, Sinhala, and Tamil. Sinhala and Tamil remain unreviewed (OD 06). |
 | API foundation tests | 6 passed via `vitest run` against a disposable database named `sahana_test`. `pnpm --filter @sahana/api test` then failed at `prisma generate` because the running API process had the query-engine file open. |
 | `pnpm test:e2e` | 3 passed: desktop 1280×800, tablet 768×1024, phone 320×720. Each signed in, saved a contact phone, and showed the Sinhala and Tamil configuration headings. |
-| Mobile sign-in and disabled emergency control | Not run. Typecheck only. |
+| `pnpm --filter @sahana/api exec vitest run test/identity.test.ts test/foundation.test.ts` | 8 passed. TOTP confirm does not write the secret to the audit log. Language preference is returned by `/api/v1/me`. |
+| Mobile sign-in on a device | Not run. The shell persists language after login and shows the non-replacement sentence from the shared catalogs. |
 | Backup, MFA enforcement, 100,000-member load | Not run. |
 
 ## Exit
