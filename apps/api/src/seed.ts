@@ -174,13 +174,17 @@ async function seedWalkthrough(societyId: string, actorId: string): Promise<void
   });
   const fund = await prisma.fund.create({ data: { societyId, name: 'Welfare fund', createdBy: actorId } });
   const journal = await prisma.journalDocument.create({
-    data: { societyId, periodId: period.id, status: 'posted', reason: 'Opening contribution', createdBy: actorId, postedAt: new Date(), postedBy: actorId },
+    data: { societyId, periodId: period.id, status: 'draft', reason: 'Opening contribution', createdBy: actorId },
   });
   await prisma.journalLine.create({
     data: { societyId, documentId: journal.id, accountId: accounts['1000']!, fundId: fund.id, memberId: member.id, debit: '25.0000', credit: '0' },
   });
   await prisma.journalLine.create({
     data: { societyId, documentId: journal.id, accountId: accounts['4000']!, fundId: fund.id, debit: '0', credit: '25.0000' },
+  });
+  await prisma.journalDocument.update({
+    where: { id: journal.id },
+    data: { status: 'posted', postedAt: new Date(), postedBy: actorId },
   });
   const committee = await prisma.committee.create({ data: { societyId, name: 'Welfare committee', createdBy: actorId } });
   const meeting = await prisma.meeting.create({

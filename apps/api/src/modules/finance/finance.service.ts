@@ -332,6 +332,32 @@ export async function listAssets(scope: Scope, page: number, pageSize: number) {
   });
 }
 
+export async function listStatementLines(scope: Scope, page: number, pageSize: number) {
+  return withSociety(scope, async (tx) => {
+    const where = { societyId: scope.societyId };
+    const [total, items] = await Promise.all([
+      tx.bankStatementLine.count({ where }),
+      tx.bankStatementLine.findMany({
+        where,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: { bookedOn: 'desc' },
+      }),
+    ]);
+    return {
+      page,
+      pageSize,
+      total,
+      items: items.map((item) => ({
+        id: item.id,
+        amount: item.amount.toString(),
+        description: item.description,
+        journalLineId: item.journalLineId,
+      })),
+    };
+  });
+}
+
 export async function importStatementCsv(scope: Scope, bankAccountId: string, csv: string, traceId: string) {
   let rows: { bookedOn: string; amount: string; description: string }[];
   try {

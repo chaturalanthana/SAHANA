@@ -29,6 +29,7 @@ import {
   getMemberLedger,
   getReconciliation,
   getStatements,
+  getStatementLines,
   postAsset,
   postBank,
   postBudget,
@@ -50,6 +51,7 @@ import {
   getTrialBalance,
   getJournals,
   getLoans,
+  getLoanApplications,
   getLookups,
   getMemberClaims,
   getMemberEmergency,
@@ -232,6 +234,7 @@ export function createApp() {
   app.get('/api/v1/members/:id/ledger', requireAuth, safe(getMemberLedger));
   app.post('/api/v1/bank-accounts', requireAuth, safe(postBank));
   app.post('/api/v1/bank-statement-lines', requireAuth, safe(postStatement));
+  app.get('/api/v1/bank-statement-lines', requireAuth, safe(getStatementLines));
   app.post('/api/v1/bank-accounts/:id/statement-import', requireAuth, safe(postStatementImport));
   app.post('/api/v1/bank-statement-lines/:id/match', requireAuth, safe(postMatch));
   app.get('/api/v1/bank-accounts/:id/reconciliation', requireAuth, safe(getReconciliation));
@@ -249,6 +252,7 @@ export function createApp() {
   app.post('/api/v1/journal-documents/:id/post', requireAuth, safe(postJournalPost));
   app.post('/api/v1/journal-documents/:id/reverse', requireAuth, safe(postJournalReverse));
   app.get('/api/v1/loan-products', requireAuth, safe(getLoans));
+  app.get('/api/v1/loan-applications', requireAuth, safe(getLoanApplications));
   app.post('/api/v1/loan-products', requireAuth, safe(postLoan));
   app.post('/api/v1/loan-products/:id/versions', requireAuth, safe(postLoanVersion));
   app.post('/api/v1/loan-applications', requireAuth, safe(postLoanApplication));

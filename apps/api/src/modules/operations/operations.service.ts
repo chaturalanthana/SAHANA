@@ -132,6 +132,7 @@ const recordKinds = {
   approvalRequest: 'approvals.read',
   loanProduct: 'loans.read',
   loanApplication: 'loans.read',
+  bankStatementLine: 'ledger.read',
   project: 'projects.read',
   suggestion: 'projects.read',
   emergencyRequest: 'emergency.read',
@@ -163,7 +164,9 @@ export async function findRecord(scope: Scope, kind: RecordKind, id: string) {
                   ? await tx.loanProduct.findFirst({ where })
                   : kind === 'loanApplication'
                     ? await tx.loanApplication.findFirst({ where })
-                    : kind === 'project'
+                    : kind === 'bankStatementLine'
+                      ? await tx.bankStatementLine.findFirst({ where })
+                      : kind === 'project'
                       ? await tx.project.findFirst({ where })
                       : kind === 'suggestion'
                         ? await tx.suggestion.findFirst({ where })

@@ -16,6 +16,7 @@ import {
   importStatementCsv,
   listAssets,
   listFunds,
+  listStatementLines,
   matchStatement,
   memberLedger,
   reconciliation,
@@ -122,6 +123,11 @@ export function postAsset(req: Request, res: Response, next: NextFunction): void
     })
     .parse(req.body);
   void send(res, next, () => createAsset(allow(req, 'ledger.post'), body, req.traceId), 201);
+}
+
+export function getStatementLines(req: Request, res: Response, next: NextFunction): void {
+  const page = parsePage(req.query);
+  void send(res, next, () => listStatementLines(allow(req, 'ledger.read'), page.page, page.pageSize));
 }
 
 export function postStatementImport(req: Request, res: Response, next: NextFunction): void {

@@ -52,12 +52,22 @@ Open http://127.0.0.1:5173.
 
 ## Sign in
 
-| Email | What you can click |
-|---|---|
-| admin.a@demo.sahana.test | Society A. Members, welfare, ledger, loans, projects, emergency, ESG, notifications, and configuration. |
+| Email                       | What you can click                                                                                           |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| admin.a@demo.sahana.test    | Society A. Members, welfare, ledger, loans, projects, emergency, ESG, notifications, and configuration.      |
 | approver.a@demo.sahana.test | Society A. Approve a critical setting or an approval request. This user cannot approve their own submission. |
-| admin.b@demo.sahana.test | Society B. Society A records are not listed. |
+| admin.b@demo.sahana.test    | Society B. Society A records are not listed.                                                                 |
 
 Password: the `SEED_DEMO_PASSWORD` you set.
 
-The seed includes one active member (DEMO-001, Nimal Perera), a spouse profile, a posted contribution, a welfare claim, a loan product, a project created from a suggestion, an emergency request, an ESG goal, an in-app template, a bank statement line, a budget, and an asset. Signing in as the society administrator also opens that member on the mobile home, because the member row is linked to that login.
+The seed includes one active member (DEMO-001, Nimal Perera), a spouse profile, a posted contribution, a welfare claim, a loan product and application, a project created from a suggestion, an emergency request, an ESG goal, an in-app template, a bank statement line, a budget, and an asset. Signing in as the society administrator also opens that member on the mobile home, because the member row is linked to that login.
+
+## Claim payment, loan schedule, and bank matching
+
+These three actions sit on the detail screen. The button is hidden when the signed-in user does not have the permission. The server checks the permission again.
+
+- **Loan schedule.** Open Loans, then Loan applications, then an application. Enter a principal and a start date. Generate schedule uses the published rule. The seeded Staff loan rule is zero interest for 12 months. Generating again replaces the previous lines.
+- **Claim payment.** The seeded medical claim is submitted, so it cannot be paid yet. Sign in as the approver, open Approvals, and approve that claim. Sign back in as the administrator, open the claim, and enter the open period, the welfare expense account, the cash account, the amount, and a reason. Pay claim posts one journal and marks the claim paid. A second payment is refused.
+- **Bank line matching.** Open Ledger, then Bank statement lines, then a line. Enter the journal line id. The statement amount must equal that line's debit minus credit, and the line must be on the same account as the bank account. A matched line is not matched again.
+
+The screens use the same labels in English, Sinhala, and Tamil. Sinhala and Tamil remain unreviewed drafts.

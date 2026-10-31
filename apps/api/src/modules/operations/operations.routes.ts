@@ -424,6 +424,18 @@ export function getLoans(req: Request, res: Response, next: NextFunction): void 
   );
 }
 
+export function getLoanApplications(req: Request, res: Response, next: NextFunction): void {
+  const page = pageOf(req);
+  void send(res, next, () =>
+    listWhere(allow(req, 'loans.read'), page.page, page.pageSize, (tx, where) =>
+      Promise.all([
+        tx.loanApplication.count({ where }),
+        tx.loanApplication.findMany({ where, take: page.pageSize, skip: (page.page - 1) * page.pageSize }),
+      ]),
+    ),
+  );
+}
+
 export function postLoan(req: Request, res: Response, next: NextFunction): void {
   const body = z.object({ name: text }).parse(req.body);
   void send(res, next, () => createNamed(allow(req, 'loans.write'), 'loanProduct', body, req.traceId), 201);

@@ -1,26 +1,28 @@
-import { useEffect, useRef } from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { isLocale } from '@sahana/i18n';
-import { SessionProvider, useSession } from './session';
-import { Shell } from './shell/Shell';
-import { ConfigPage } from './pages/ConfigPage';
-import { MemberPage } from './pages/MemberPage';
-import { FinancePage } from './pages/FinancePage';
+import { useEffect, useRef } from "react";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { isLocale } from "@sahana/i18n";
+import { SessionProvider, useSession } from "./session";
+import { Shell } from "./shell/Shell";
+import { ConfigPage } from "./pages/ConfigPage";
+import { MemberPage } from "./pages/MemberPage";
+import { FinancePage } from "./pages/FinancePage";
 import {
   ApprovalsPage,
+  BankLinesPage,
   ClaimsPage,
   EmergencyPage,
   EsgPage,
   GovernancePage,
+  LoanApplicationsPage,
   LoansPage,
   NotificationsPage,
   ProjectsPage,
   SuggestionsPage,
   WelfareSchemesPage,
-} from './pages/ModuleScreen';
-import { WorkspacePage } from './pages/WorkspacePage';
-import { LoginPage } from './pages/LoginPage';
-import { useI18n } from './i18n';
+} from "./pages/ModuleScreen";
+import { WorkspacePage } from "./pages/WorkspacePage";
+import { LoginPage } from "./pages/LoginPage";
+import { useI18n } from "./i18n";
 
 function LocaleSync() {
   const session = useSession();
@@ -39,7 +41,13 @@ function LocaleSync() {
     if (!session.config) return;
     if (isLocale(societyDefault)) setLocale(societyDefault);
     synced.current = userId;
-  }, [preferred, session.config, session.me?.user.id, setLocale, societyDefault]);
+  }, [
+    preferred,
+    session.config,
+    session.me?.user.id,
+    setLocale,
+    societyDefault,
+  ]);
   return null;
 }
 
@@ -47,7 +55,7 @@ function Protected() {
   const session = useSession();
   const { t } = useI18n();
   if (session.isLoading) {
-    return <p className="p-6 text-sm text-body">{t('common.state.loading')}</p>;
+    return <p className="p-6 text-sm text-body">{t("common.state.loading")}</p>;
   }
   if (!session.me) return <Navigate to="/login" replace />;
   return (
@@ -55,7 +63,10 @@ function Protected() {
       <LocaleSync />
       <Routes>
         <Route path="/config" element={<ConfigPage />} />
-        <Route path="/members" element={<WorkspacePage sectionKey="members" />} />
+        <Route
+          path="/members"
+          element={<WorkspacePage sectionKey="members" />}
+        />
         <Route path="/members/:id" element={<MemberPage />} />
         <Route path="/governance" element={<GovernancePage />} />
         <Route path="/governance/:id" element={<GovernancePage />} />
@@ -66,6 +77,13 @@ function Protected() {
         <Route path="/approvals" element={<ApprovalsPage />} />
         <Route path="/approvals/:id" element={<ApprovalsPage />} />
         <Route path="/ledger" element={<FinancePage />} />
+        <Route path="/bank-lines" element={<BankLinesPage />} />
+        <Route path="/bank-lines/:id" element={<BankLinesPage />} />
+        <Route path="/loans/applications" element={<LoanApplicationsPage />} />
+        <Route
+          path="/loans/applications/:id"
+          element={<LoanApplicationsPage />}
+        />
         <Route path="/loans" element={<LoansPage />} />
         <Route path="/loans/:id" element={<LoansPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
